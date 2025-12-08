@@ -179,7 +179,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 md:mb-8">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Service Requests</h2>
         {!isReadOnly && (
           <button 
@@ -217,7 +217,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
         {sortedRequests.length > 0 ? sortedRequests.map(req => (
           <div key={req.id} className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col hover:shadow-md transition-shadow group">
             <div className="p-5 flex-1">

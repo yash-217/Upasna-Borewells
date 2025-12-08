@@ -359,6 +359,9 @@ export default function App() {
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
 
+    // Only allow swipe to OPEN sidebar on desktop-like usage or if we decide to keep the drawer accessible
+    // With bottom nav, sidebar is mostly for settings/logout. 
+    // Let's keep the swipe to access those settings easily.
     if (isRightSwipe && !isSidebarOpen) {
       setSidebarOpen(true);
     }
@@ -434,6 +437,22 @@ export default function App() {
     </button>
   );
 
+  const BottomNavItem = ({ view, icon: Icon, label }: { view: View; icon: React.ElementType; label: string }) => (
+    <button
+      onClick={() => { setCurrentView(view); window.scrollTo(0,0); }}
+      className={`flex flex-col items-center justify-center w-full h-full space-y-1 active:scale-95 transition-transform ${
+        currentView === view
+          ? 'text-blue-600 dark:text-blue-400'
+          : 'text-slate-400 dark:text-neutral-500 hover:text-slate-600 dark:hover:text-neutral-300'
+      }`}
+    >
+      <div className={`p-1 rounded-full ${currentView === view ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+        <Icon size={22} className={currentView === view ? 'fill-blue-600/20 dark:fill-blue-400/20' : ''} />
+      </div>
+      <span className="text-[10px] font-medium tracking-tight">{label}</span>
+    </button>
+  );
+
   return (
     <div 
       className="min-h-screen bg-slate-50 dark:bg-black flex transition-colors duration-200 overflow-x-hidden"
@@ -456,7 +475,7 @@ export default function App() {
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm transition-opacity" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar (Desktop Nav + Mobile Settings Drawer) */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-50 w-72 bg-white dark:bg-neutral-900 border-r border-slate-200 dark:border-neutral-800 transform transition-transform duration-300 ease-out flex flex-col shadow-2xl lg:shadow-none
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
@@ -470,12 +489,18 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
+        {/* Sidebar Nav (Hidden on Mobile, replaced by Bottom Bar) */}
+        <nav className="flex-1 space-y-1 p-4 overflow-y-auto hidden lg:block">
           <NavItem view={View.DASHBOARD} icon={LayoutDashboard} />
           <NavItem view={View.REQUESTS} icon={Wrench} />
           <NavItem view={View.INVENTORY} icon={Package} />
           <NavItem view={View.EMPLOYEES} icon={UsersIcon} />
         </nav>
+
+        {/* Mobile specific label for sidebar */}
+        <div className="lg:hidden p-4">
+           <div className="text-xs font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider mb-2 px-2">Settings</div>
+        </div>
 
         <div className="border-t border-slate-100 dark:border-neutral-800 p-4 space-y-2 mt-auto">
            <button onClick={toggleDarkMode} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 dark:text-neutral-400 hover:bg-slate-50 dark:hover:bg-neutral-800 hover:text-slate-700 dark:hover:text-neutral-200 rounded-lg transition-colors touch-manipulation">
@@ -487,29 +512,28 @@ export default function App() {
              <span>Sign Out</span>
            </button>
            <div className="px-4 py-2 text-xs text-slate-400 dark:text-neutral-600 text-center">
-             v1.6.0 &copy; 2024
+             v1.8.0 &copy; 2024
            </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden bg-slate-50 dark:bg-black w-full">
+      <main className="flex-1 flex flex-col min-h-screen overflow-hidden bg-slate-50 dark:bg-black w-full pb-24 lg:pb-0">
         {/* Header */}
         <header className="bg-white dark:bg-neutral-900 border-b border-slate-200 dark:border-neutral-800 sticky top-0 z-30 transition-all duration-200">
-          {currentUser.isGuest && (
-            <div className="bg-blue-600 text-white text-xs text-center py-1 font-medium tracking-wide">
-              VIEWING AS GUEST (READ ONLY)
-            </div>
-          )}
           <div className="flex flex-col md:flex-row md:items-center justify-between px-4 lg:px-8 py-3 gap-3">
             <div className="flex items-center justify-between w-full md:w-auto">
-              {/* Left: Hamburger & Title */}
+              {/* Left: Hamburger (For Settings on Mobile) & Title */}
               <div className="flex items-center gap-3">
                 <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-800 rounded-lg touch-manipulation">
                   <Menu size={24} />
                 </button>
-                <div className="lg:hidden font-semibold text-slate-800 dark:text-white truncate max-w-[200px]">
-                  {currentView}
+                {/* Mobile Brand Label instead of page title */}
+                <div className="lg:hidden flex items-center gap-2">
+                  <div className="bg-blue-600 p-1.5 rounded-lg text-white">
+                    <Droplets size={18} />
+                  </div>
+                  <span className="font-bold text-slate-800 dark:text-white text-lg tracking-tight">Upasna<span className="text-blue-600 dark:text-blue-400">Borewells</span></span>
                 </div>
               </div>
               
@@ -577,7 +601,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 lg:p-8">
+        <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6 lg:p-8">
           {currentView === View.DASHBOARD && (
             <div className="animate-in fade-in duration-500">
                <Dashboard requests={requests} employees={employees} vehicleFilter={vehicleFilter} />
@@ -624,6 +648,14 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {/* Bottom Navigation (Mobile Only) */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-neutral-900 border-t border-slate-200 dark:border-neutral-800 pb-safe flex justify-around items-center z-40 h-16 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <BottomNavItem view={View.DASHBOARD} icon={LayoutDashboard} label="Home" />
+        <BottomNavItem view={View.REQUESTS} icon={Wrench} label="Requests" />
+        <BottomNavItem view={View.INVENTORY} icon={Package} label="Stock" />
+        <BottomNavItem view={View.EMPLOYEES} icon={UsersIcon} label="Team" />
+      </div>
     </div>
   );
 }

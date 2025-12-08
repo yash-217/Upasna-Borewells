@@ -79,7 +79,7 @@ export const Employees: React.FC<EmployeesProps> = ({
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
         {filteredEmployees.length > 0 ? filteredEmployees.map((emp) => (
           <div key={emp.id} className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 p-6 flex items-start space-x-4">
             <img 

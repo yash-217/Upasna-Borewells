@@ -62,9 +62,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehic
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {/* Stat Cards */}
-        <div className="bg-white dark:bg-neutral-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
+        <div className="bg-white dark:bg-neutral-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-neutral-400">Revenue</p>
@@ -79,7 +79,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehic
           </span>
         </div>
 
-        <div className="bg-white dark:bg-neutral-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
+        <div className="bg-white dark:bg-neutral-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-neutral-400">Pending Jobs</p>
@@ -92,7 +92,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehic
           <span className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-2 block">Action required</span>
         </div>
 
-        <div className="bg-white dark:bg-neutral-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
+        <div className="bg-white dark:bg-neutral-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-neutral-400">Assigned Staff</p>
@@ -105,7 +105,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehic
           <span className="text-xs text-slate-500 dark:text-neutral-400 font-medium mt-2 block">Active crew</span>
         </div>
 
-        <div className="bg-white dark:bg-neutral-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
+        <div className="bg-white dark:bg-neutral-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-neutral-400">Efficiency</p>
@@ -120,8 +120,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehic
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-neutral-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <div className="bg-white dark:bg-neutral-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
           <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Revenue Overview</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -146,7 +146,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehic
           </div>
         </div>
 
-        <div className="bg-white dark:bg-neutral-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
+        <div className="bg-white dark:bg-neutral-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
           <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Service Type Distribution</h3>
           {serviceTypeDistribution.length > 0 ? (
             <>
