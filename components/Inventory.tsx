@@ -168,10 +168,9 @@ export const Inventory: React.FC<InventoryProps> = ({
                       <button 
                         type="button" 
                         onClick={() => {
-                           if(window.confirm('Delete this product?')) {
-                             onDeleteProduct(editingProduct.id);
-                             setIsModalOpen(false);
-                           }
+                           // Use parent handler which triggers the global confirmation modal
+                           onDeleteProduct(editingProduct.id);
+                           setIsModalOpen(false);
                         }}
                         className="w-full flex items-center justify-center gap-2 p-2.5 text-red-600 border border-red-200 dark:border-red-900/30 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium"
                       >
