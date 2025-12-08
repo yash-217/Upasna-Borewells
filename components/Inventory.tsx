@@ -8,10 +8,11 @@ interface InventoryProps {
   onAddProduct: (p: Product) => void;
   onUpdateProduct: (p: Product) => void;
   onDeleteProduct: (id: string) => void;
+  isReadOnly?: boolean;
 }
 
 export const Inventory: React.FC<InventoryProps> = ({ 
-  products, currentUser, onAddProduct, onUpdateProduct, onDeleteProduct 
+  products, currentUser, onAddProduct, onUpdateProduct, onDeleteProduct, isReadOnly 
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -20,6 +21,9 @@ export const Inventory: React.FC<InventoryProps> = ({
   });
 
   const openModal = (product?: Product) => {
+    // Prevent opening modal in read-only mode (double check)
+    if (isReadOnly && !product) return; 
+
     if (product) {
       setEditingProduct(product);
       setFormData(product);
@@ -55,12 +59,14 @@ export const Inventory: React.FC<InventoryProps> = ({
     <div className="space-y-6">
       <div className="flex justify-between items-center sticky top-0 z-10 bg-slate-50 dark:bg-black py-2">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Product Inventory</h2>
-        <button 
-          onClick={() => openModal()}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm text-sm"
-        >
-          <Plus size={18} /> <span className="hidden sm:inline">Add Product</span><span className="sm:hidden">Add</span>
-        </button>
+        {!isReadOnly && (
+          <button 
+            onClick={() => openModal()}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm text-sm"
+          >
+            <Plus size={18} /> <span className="hidden sm:inline">Add Product</span><span className="sm:hidden">Add</span>
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -68,7 +74,7 @@ export const Inventory: React.FC<InventoryProps> = ({
           <div key={p.id} className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 group overflow-hidden hover:shadow-md transition-shadow">
             
             {/* Mobile View: Compact Row */}
-            <div className="md:hidden flex items-center justify-between p-4" onClick={() => openModal(p)}>
+            <div className="md:hidden flex items-center justify-between p-4" onClick={() => !isReadOnly && openModal(p)}>
               <div className="flex-1 min-w-0 pr-3">
                 <div className="flex items-center gap-2 mb-1">
                   <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider 
@@ -83,7 +89,7 @@ export const Inventory: React.FC<InventoryProps> = ({
                   ₹{p.unitPrice.toLocaleString()} <span className="text-slate-400 dark:text-neutral-500 font-normal">/ {p.unit}</span>
                 </div>
               </div>
-              <ChevronRight size={20} className="text-slate-300 dark:text-neutral-600" />
+              {!isReadOnly && <ChevronRight size={20} className="text-slate-300 dark:text-neutral-600" />}
             </div>
 
             {/* Desktop View: Full Card */}
@@ -96,14 +102,16 @@ export const Inventory: React.FC<InventoryProps> = ({
                       'bg-slate-100 text-slate-600 dark:bg-neutral-800 dark:text-neutral-400'}`}>
                     {p.category}
                   </span>
-                  <div className="flex gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); openModal(p); }} className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-neutral-800 rounded">
-                      <Edit2 size={14} />
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); onDeleteProduct(p.id); }} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-slate-50 dark:hover:bg-neutral-800 rounded">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  {!isReadOnly && (
+                    <div className="flex gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={(e) => { e.stopPropagation(); openModal(p); }} className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-neutral-800 rounded">
+                        <Edit2 size={14} />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); onDeleteProduct(p.id); }} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-slate-50 dark:hover:bg-neutral-800 rounded">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <h3 className="font-semibold text-slate-800 dark:text-neutral-100 mb-1 line-clamp-2 min-h-[3rem]">{p.name}</h3>
                 <div className="flex items-baseline gap-1 text-slate-900 dark:text-white mt-2">
@@ -135,40 +143,42 @@ export const Inventory: React.FC<InventoryProps> = ({
               </div>
               
               <div className="p-5 space-y-4 overflow-y-auto">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Product Name</label>
-                  <input required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                    value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Category</label>
-                    <select className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                      value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as any})}>
-                      {['Motor', 'Pipe', 'Cable', 'Service', 'Accessory'].map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Unit</label>
-                    <input required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                      placeholder="e.g. ft, pcs"
-                      value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} />
-                  </div>
+                <div className={isReadOnly ? "pointer-events-none opacity-80" : ""}>
+                   {/* Fields */}
+                   <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Product Name</label>
+                      <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                        value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                   </div>
+                   
+                   <div className="grid grid-cols-2 gap-4 mt-4">
+                     <div>
+                       <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Category</label>
+                       <select disabled={isReadOnly} className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                         value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as any})}>
+                         {['Motor', 'Pipe', 'Cable', 'Service', 'Accessory'].map(c => <option key={c} value={c}>{c}</option>)}
+                       </select>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Unit</label>
+                       <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                         placeholder="e.g. ft, pcs"
+                         value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} />
+                     </div>
+                   </div>
+
+                   <div className="mt-4">
+                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Unit Price (₹)</label>
+                     <input disabled={isReadOnly} required type="number" min="0" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                       value={formData.unitPrice} onChange={e => setFormData({...formData, unitPrice: Number(e.target.value)})} />
+                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Unit Price (₹)</label>
-                  <input required type="number" min="0" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                    value={formData.unitPrice} onChange={e => setFormData({...formData, unitPrice: Number(e.target.value)})} />
-                </div>
-
-                {editingProduct && (
+                {editingProduct && !isReadOnly && (
                    <div className="pt-4 mt-2 border-t border-slate-100 dark:border-neutral-800">
                       <button 
                         type="button" 
                         onClick={() => {
-                           // Use parent handler which triggers the global confirmation modal
                            onDeleteProduct(editingProduct.id);
                            setIsModalOpen(false);
                         }}
@@ -181,10 +191,14 @@ export const Inventory: React.FC<InventoryProps> = ({
               </div>
 
               <div className="p-5 border-t border-slate-100 dark:border-neutral-800 flex justify-end gap-3 bg-slate-50 dark:bg-neutral-900/50 rounded-b-xl mt-auto">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
-                  {editingProduct ? 'Save Changes' : 'Add Product'}
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium">
+                  {isReadOnly ? 'Close' : 'Cancel'}
                 </button>
+                {!isReadOnly && (
+                  <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
+                    {editingProduct ? 'Save Changes' : 'Add Product'}
+                  </button>
+                )}
               </div>
             </form>
           </div>

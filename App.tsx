@@ -10,7 +10,7 @@ import {
   Sun,
   LogOut,
   Truck,
-  Loader2
+  Eye
 } from 'lucide-react';
 import { ServiceRequests } from './components/ServiceRequests';
 import { Dashboard } from './components/Dashboard';
@@ -32,6 +32,36 @@ enum View {
   INVENTORY = 'Inventory',
   EMPLOYEES = 'Employees'
 }
+
+// --- Slick Splash Screen Component ---
+const SplashScreen = () => (
+  <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-50 dark:bg-black transition-colors duration-500">
+    <div className="relative flex flex-col items-center">
+      {/* Animated Logo Container */}
+      <div className="relative w-24 h-24 mb-6">
+        <div className="absolute inset-0 bg-blue-600 rounded-3xl rotate-3 opacity-20 animate-pulse"></div>
+        <div className="absolute inset-0 bg-blue-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-400/30 dark:shadow-blue-900/30 transform transition-transform animate-bounce-slight">
+          <Droplets size={48} className="text-white animate-pulse" />
+        </div>
+      </div>
+      
+      {/* Branding Text */}
+      <div className="text-center space-y-2 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <h1 className="text-4xl font-extrabold text-slate-800 dark:text-white tracking-tight">
+          Upasna<span className="text-blue-600">Borewells</span>
+        </h1>
+        <p className="text-slate-400 dark:text-neutral-500 font-medium tracking-widest uppercase text-xs">
+          Management System
+        </p>
+      </div>
+
+      {/* Loading Bar */}
+      <div className="mt-12 w-48 h-1 bg-slate-200 dark:bg-neutral-800 rounded-full overflow-hidden">
+        <div className="h-full bg-blue-600 animate-progress-indeterminate rounded-full"></div>
+      </div>
+    </div>
+  </div>
+);
 
 export default function App() {
   const [currentView, setCurrentView] = useState<View>(View.DASHBOARD);
@@ -77,30 +107,38 @@ export default function App() {
 
   // Auth & Data Initialization
   useEffect(() => {
-    // 1. Check active session
+    // 1. Check active session from LocalStorage (Persistence)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setCurrentUser({
           name: session.user.user_metadata.full_name || 'User',
           email: session.user.email || '',
-          photoURL: session.user.user_metadata.avatar_url
+          photoURL: session.user.user_metadata.avatar_url,
+          isGuest: false
         });
+        // User is logged in, fetch data immediately
         fetchData();
       } else {
+        // No active session found, show login screen
         setIsLoading(false);
       }
     });
 
-    // 2. Listen for auth changes
+    // 2. Listen for auth changes (Sign In / Sign Out events)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setCurrentUser({
           name: session.user.user_metadata.full_name || 'User',
           email: session.user.email || '',
-          photoURL: session.user.user_metadata.avatar_url
+          photoURL: session.user.user_metadata.avatar_url,
+          isGuest: false
         });
-        fetchData();
-      } else {
+        // If data hasn't been fetched yet (e.g., fresh login), fetch it
+        if (requests.length === 0) {
+           fetchData();
+        }
+      } else if (!currentUser?.isGuest) {
+        // Only clear if we aren't explicitly in guest mode
         setCurrentUser(null);
         setRequests([]);
         setProducts([]);
@@ -113,6 +151,7 @@ export default function App() {
   }, []);
 
   const fetchData = async () => {
+    // Keep loading true while fetching data to show splash screen
     setIsLoading(true);
     try {
       const [reqRes, prodRes, empRes] = await Promise.all([
@@ -128,16 +167,24 @@ export default function App() {
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
-      setIsLoading(false);
+      // Artificial delay to let the nice animation play at least briefly on fast connections
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 800);
     }
   };
 
   const handleLogin = async () => {
     try {
+      const redirectUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         }
       });
       if (error) throw error;
@@ -147,8 +194,27 @@ export default function App() {
     }
   };
 
+  const handleGuestLogin = () => {
+    setCurrentUser({
+      name: 'Guest',
+      email: 'guest@upasna.local',
+      isGuest: true
+    });
+    fetchData();
+  };
+
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    setIsLoading(true);
+    if (currentUser?.isGuest) {
+      setCurrentUser(null);
+      setRequests([]);
+      setProducts([]);
+      setEmployees([]);
+      setIsLoading(false);
+    } else {
+      await supabase.auth.signOut();
+      // Auth state listener handles the rest
+    }
   };
 
   const toggleDarkMode = () => {
@@ -302,12 +368,7 @@ export default function App() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-black">
-        <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
-        <p className="text-slate-500 dark:text-neutral-400 font-medium">Loading Upasna Manager...</p>
-      </div>
-    );
+    return <SplashScreen />;
   }
 
   // Login Screen
@@ -330,11 +391,29 @@ export default function App() {
            
            <button 
              onClick={handleLogin}
-             className="w-full flex items-center justify-center gap-3 bg-white dark:bg-neutral-800 text-slate-700 dark:text-white border border-slate-300 dark:border-neutral-700 hover:bg-slate-50 dark:hover:bg-neutral-700 font-medium py-3.5 px-4 rounded-xl transition-all shadow-sm active:scale-95 touch-manipulation"
+             className="w-full flex items-center justify-center gap-3 bg-white dark:bg-neutral-800 text-slate-700 dark:text-white border border-slate-300 dark:border-neutral-700 hover:bg-slate-50 dark:hover:bg-neutral-700 font-medium py-3.5 px-4 rounded-xl transition-all shadow-sm active:scale-95 touch-manipulation mb-4"
            >
              <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
              Sign in with Google
            </button>
+
+           <div className="relative mb-4">
+             <div className="absolute inset-0 flex items-center">
+               <div className="w-full border-t border-slate-200 dark:border-neutral-800"></div>
+             </div>
+             <div className="relative flex justify-center text-sm">
+               <span className="px-2 bg-white dark:bg-neutral-900 text-slate-400">or</span>
+             </div>
+           </div>
+
+           <button 
+             onClick={handleGuestLogin}
+             className="w-full flex items-center justify-center gap-2 text-slate-600 dark:text-neutral-400 hover:text-slate-800 dark:hover:text-white font-medium py-2 transition-colors text-sm"
+           >
+             <Eye size={16} />
+             Continue as Guest (Read Only)
+           </button>
+
            <p className="mt-6 text-xs text-slate-400 dark:text-neutral-500">Authorized personnel only.</p>
         </div>
       </div>
@@ -408,7 +487,7 @@ export default function App() {
              <span>Sign Out</span>
            </button>
            <div className="px-4 py-2 text-xs text-slate-400 dark:text-neutral-600 text-center">
-             v1.5.0 &copy; 2024
+             v1.6.0 &copy; 2024
            </div>
         </div>
       </aside>
@@ -417,6 +496,11 @@ export default function App() {
       <main className="flex-1 flex flex-col min-h-screen overflow-hidden bg-slate-50 dark:bg-black w-full">
         {/* Header */}
         <header className="bg-white dark:bg-neutral-900 border-b border-slate-200 dark:border-neutral-800 sticky top-0 z-30 transition-all duration-200">
+          {currentUser.isGuest && (
+            <div className="bg-blue-600 text-white text-xs text-center py-1 font-medium tracking-wide">
+              VIEWING AS GUEST (READ ONLY)
+            </div>
+          )}
           <div className="flex flex-col md:flex-row md:items-center justify-between px-4 lg:px-8 py-3 gap-3">
             <div className="flex items-center justify-between w-full md:w-auto">
               {/* Left: Hamburger & Title */}
@@ -431,11 +515,13 @@ export default function App() {
               
               {/* Mobile Right: Just Profile */}
               <div className="flex items-center gap-2 md:hidden">
-                 <div className="h-9 w-9 rounded-full bg-slate-200 dark:bg-neutral-800 overflow-hidden border border-slate-300 dark:border-neutral-700">
+                 <div className="h-9 w-9 rounded-full bg-slate-200 dark:bg-neutral-800 overflow-hidden border border-slate-300 dark:border-neutral-700 flex items-center justify-center">
                     {currentUser.photoURL ? (
                       <img src={currentUser.photoURL} alt="User" className="w-full h-full object-cover" />
+                    ) : currentUser.isGuest ? (
+                      <Eye size={16} className="text-slate-500 dark:text-neutral-400" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-500 font-bold">{currentUser.name[0]}</div>
+                      <div className="text-slate-500 font-bold">{currentUser.name[0]}</div>
                     )}
                  </div>
               </div>
@@ -458,13 +544,17 @@ export default function App() {
                <div className="flex items-center gap-3 pl-3 border-l border-slate-200 dark:border-neutral-800">
                   <div className="flex flex-col text-right">
                       <span className="text-sm font-semibold text-slate-800 dark:text-white">{currentUser.name}</span>
-                      <span className="text-xs text-slate-500 dark:text-neutral-500">{currentUser.email}</span>
+                      <span className="text-xs text-slate-500 dark:text-neutral-500">
+                        {currentUser.isGuest ? 'Read Only Access' : currentUser.email}
+                      </span>
                   </div>
-                  <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-neutral-800 overflow-hidden border border-slate-300 dark:border-neutral-700">
+                  <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-neutral-800 overflow-hidden border border-slate-300 dark:border-neutral-700 flex items-center justify-center">
                     {currentUser.photoURL ? (
                       <img src={currentUser.photoURL} alt="User" className="w-full h-full object-cover" />
+                    ) : currentUser.isGuest ? (
+                      <Eye size={20} className="text-slate-500 dark:text-neutral-400" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-500 font-bold">{currentUser.name[0]}</div>
+                      <div className="text-slate-500 font-bold">{currentUser.name[0]}</div>
                     )}
                   </div>
                </div>
@@ -503,6 +593,7 @@ export default function App() {
                 onUpdateRequest={handleUpdateRequest}
                 onDeleteRequest={handleDeleteRequest}
                 vehicleFilter={vehicleFilter}
+                isReadOnly={currentUser.isGuest}
               />
             </div>
           )}
@@ -514,6 +605,7 @@ export default function App() {
                 onAddProduct={handleAddProduct} 
                 onUpdateProduct={handleUpdateProduct} 
                 onDeleteProduct={handleDeleteProduct}
+                isReadOnly={currentUser.isGuest}
               />
             </div>
           )}
@@ -526,6 +618,7 @@ export default function App() {
                 onUpdateEmployee={handleUpdateEmployee} 
                 onDeleteEmployee={handleDeleteEmployee}
                 vehicleFilter={vehicleFilter}
+                isReadOnly={currentUser.isGuest}
               />
             </div>
           )}

@@ -1,16 +1,39 @@
 import { createClient } from '@supabase/supabase-js';
 import { Employee, Product, ServiceRequest } from '../types';
 
-// Detect environment variables (works for Vite or Create React App)
-const env = (import.meta as any).env || {};
-const supabaseUrl = env.VITE_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = env.VITE_PUBLIC_SUPABASE_ANON_KEY || '';
+// Helper to safely access environment variables in various environments (Vite, Webpack, etc.)
+const getEnv = (key: string): string | undefined => {
+  // 1. Try Vite's import.meta.env
+  try {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+      return (import.meta as any).env[key];
+    }
+  } catch (e) {}
+
+  // 2. Try process.env (Standard Node/Webpack/CRA)
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env[key];
+    }
+  } catch (e) {}
+
+  return undefined;
+};
+
+// Access environment variables using VITE_PUBLIC_ prefix
+const supabaseUrl = getEnv('VITE_PUBLIC_SUPABASE_URL');
+const supabaseKey = getEnv('VITE_PUBLIC_SUPABASE_ANON_KEY');
 
 if (!supabaseUrl || !supabaseKey) {
-  console.warn('Supabase URL or Key is missing. Check your environment variables.');
+  console.warn('Supabase Configuration Warning: VITE_PUBLIC_SUPABASE_URL or VITE_PUBLIC_SUPABASE_ANON_KEY is missing. Check your environment variables.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Initialize client
+// Providing fallbacks to prevent runtime crashes if variables are missing, though functionality will fail
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  supabaseKey || 'placeholder'
+);
 
 // --- Data Mappers (DB snake_case <-> App camelCase) ---
 

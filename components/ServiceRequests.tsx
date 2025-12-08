@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Product, ServiceRequest, ServiceStatus, ServiceType, ServiceItem, User } from '../types';
-import { Plus, Search, Filter, Edit2, Trash2, X, Truck } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, X, Truck, Eye } from 'lucide-react';
 import { VEHICLES } from '../constants';
 
 interface ServiceRequestsProps {
@@ -11,10 +11,11 @@ interface ServiceRequestsProps {
   onUpdateRequest: (req: ServiceRequest) => void;
   onDeleteRequest: (id: string) => void;
   vehicleFilter: string;
+  isReadOnly?: boolean;
 }
 
 export const ServiceRequests: React.FC<ServiceRequestsProps> = ({ 
-  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter
+  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<ServiceRequest | null>(null);
@@ -120,6 +121,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       setEditingRequest(req);
       setFormData(req);
     } else {
+      if (isReadOnly) return; // Should not happen but just in case
       setEditingRequest(null);
       setFormData({
         customerName: '',
@@ -153,9 +155,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     return matchesSearch && matchesFilter && matchesVehicle;
   });
 
-  // Sorting Logic: 
-  // Pending/In Progress -> Oldest first (FIFO)
-  // Completed/Cancelled -> Newest first (LIFO)
+  // Sorting Logic
   const sortedRequests = [...filteredRequests].sort((a, b) => {
     const activeStatuses = [ServiceStatus.PENDING, ServiceStatus.IN_PROGRESS];
     const isActiveA = activeStatuses.includes(a.status);
@@ -181,12 +181,14 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     <div>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Service Requests</h2>
-        <button 
-          onClick={() => openModal()}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm w-full sm:w-auto justify-center touch-manipulation"
-        >
-          <Plus size={18} /> New Request
-        </button>
+        {!isReadOnly && (
+          <button 
+            onClick={() => openModal()}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm w-full sm:w-auto justify-center touch-manipulation"
+          >
+            <Plus size={18} /> New Request
+          </button>
+        )}
       </div>
 
       <div className="bg-white dark:bg-neutral-900 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 mb-6">
@@ -273,11 +275,13 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             <div className="bg-slate-50 dark:bg-black/40 px-5 py-3 border-t border-slate-100 dark:border-neutral-800 flex justify-end items-center">
                <div className="flex gap-2">
                  <button onClick={() => openModal(req)} className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-blue-600 transition-colors">
-                   <Edit2 size={16} />
+                   {isReadOnly ? <Eye size={16} /> : <Edit2 size={16} />}
                  </button>
-                 <button onClick={() => onDeleteRequest(req.id)} className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-red-600 transition-colors">
-                   <Trash2 size={16} />
-                 </button>
+                 {!isReadOnly && (
+                   <button onClick={() => onDeleteRequest(req.id)} className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-red-600 transition-colors">
+                     <Trash2 size={16} />
+                   </button>
+                 )}
                </div>
             </div>
           </div>
@@ -288,56 +292,58 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         )}
       </div>
 
-      {/* Edit/Create Modal */}
+      {/* Edit/Create Modal (In ReadOnly, acts as View Details) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-neutral-800">
             <form onSubmit={handleSubmit}>
               <div className="p-6 border-b border-slate-100 dark:border-neutral-800 flex justify-between items-center sticky top-0 bg-white dark:bg-neutral-900 z-10">
-                <h3 className="text-xl font-bold text-slate-800 dark:text-white">{editingRequest ? 'Edit Request' : 'New Service Request'}</h3>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white">
+                  {isReadOnly ? 'Request Details' : (editingRequest ? 'Edit Request' : 'New Service Request')}
+                </h3>
                 <button type="button" onClick={closeModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"><X size={24} /></button>
               </div>
               
-              <div className="p-6 space-y-6">
+              <div className={`p-6 space-y-6 ${isReadOnly ? 'pointer-events-none opacity-90' : ''}`}>
                 {/* Customer Details */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Customer Name</label>
-                    <input required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
                       value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Phone</label>
-                    <input required type="tel" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    <input disabled={isReadOnly} required type="tel" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
                       value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Location</label>
-                    <input required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
                       value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Service Type</label>
-                    <select className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    <select disabled={isReadOnly} className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
                       value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as ServiceType})}>
                       {Object.values(ServiceType).map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Assigned Vehicle</label>
-                    <select className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    <select disabled={isReadOnly} className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
                       value={formData.vehicle} onChange={e => setFormData({...formData, vehicle: e.target.value})}>
                       {VEHICLES.map(v => <option key={v} value={v}>{v}</option>)}
                     </select>
                   </div>
                    <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Date</label>
-                    <input required type="date" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    <input disabled={isReadOnly} required type="date" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
                       value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
                   </div>
                    <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Status</label>
-                    <select className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    <select disabled={isReadOnly} className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
                       value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as ServiceStatus})}>
                       {Object.values(ServiceStatus).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -350,12 +356,12 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                   <div className="grid grid-cols-2 gap-4">
                      <div>
                         <label className="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Depth (ft)</label>
-                        <input type="number" min="0" className="w-full bg-white dark:bg-black border border-blue-200 dark:border-blue-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
+                        <input disabled={isReadOnly} type="number" min="0" className="w-full bg-white dark:bg-black border border-blue-200 dark:border-blue-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
                           value={formData.drillingDepth} onChange={e => handleDrillingChange(Number(e.target.value), formData.drillingRate || 0)} />
                      </div>
                      <div>
                         <label className="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Rate (₹/ft)</label>
-                        <input type="number" min="0" className="w-full bg-white dark:bg-black border border-blue-200 dark:border-blue-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
+                        <input disabled={isReadOnly} type="number" min="0" className="w-full bg-white dark:bg-black border border-blue-200 dark:border-blue-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
                           value={formData.drillingRate} onChange={e => handleDrillingChange(formData.drillingDepth || 0, Number(e.target.value))} />
                      </div>
                   </div>
@@ -371,25 +377,27 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                     <span className="text-blue-600 dark:text-blue-400">Total: ₹{formData.totalCost?.toLocaleString()}</span>
                   </h4>
                   
-                  <div className="mb-3 flex gap-2">
-                     <div className="relative flex-1 min-w-0">
-                       <select id="product-select" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white truncate"
-                          onChange={(e) => {
-                            if(e.target.value) {
-                               handleAddItem(e.target.value);
-                               e.target.value = '';
-                            }
-                          }}
-                       >
-                         <option value="">Add Product...</option>
-                         {products.map(p => (
-                           <option key={p.id} value={p.id}>
-                             {p.name.substring(0, 30)}{p.name.length > 30 ? '...' : ''} - ₹{p.unitPrice}/{p.unit}
-                           </option>
-                         ))}
-                       </select>
-                     </div>
-                  </div>
+                  {!isReadOnly && (
+                    <div className="mb-3 flex gap-2">
+                       <div className="relative flex-1 min-w-0">
+                         <select id="product-select" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white truncate"
+                            onChange={(e) => {
+                              if(e.target.value) {
+                                 handleAddItem(e.target.value);
+                                 e.target.value = '';
+                              }
+                            }}
+                         >
+                           <option value="">Add Product...</option>
+                           {products.map(p => (
+                             <option key={p.id} value={p.id}>
+                               {p.name.substring(0, 30)}{p.name.length > 30 ? '...' : ''} - ₹{p.unitPrice}/{p.unit}
+                             </option>
+                           ))}
+                         </select>
+                       </div>
+                    </div>
+                  )}
 
                   {formData.items && formData.items.length > 0 ? (
                     <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -404,14 +412,16 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                              
                              <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-neutral-700">
                                <div className="font-medium text-slate-800 dark:text-white">₹{item.priceAtTime * item.quantity}</div>
-                               <div className="flex items-center gap-3">
-                                   <div className="flex items-center border border-slate-200 dark:border-neutral-600 rounded bg-white dark:bg-black">
-                                      <button type="button" onClick={() => handleUpdateItemQuantity(idx, item.quantity - 1)} className="px-3 py-1 text-slate-500 hover:bg-slate-50 dark:hover:bg-neutral-700 text-lg leading-none flex items-center justify-center">-</button>
-                                      <span className="px-2 py-1 text-xs font-medium text-slate-800 dark:text-neutral-200 min-w-[1.5rem] text-center">{item.quantity}</span>
-                                      <button type="button" onClick={() => handleUpdateItemQuantity(idx, item.quantity + 1)} className="px-3 py-1 text-slate-500 hover:bg-slate-50 dark:hover:bg-neutral-700 text-lg leading-none flex items-center justify-center">+</button>
-                                   </div>
-                                   <button type="button" onClick={() => handleRemoveItem(idx)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={16} /></button>
-                               </div>
+                               {!isReadOnly && (
+                                 <div className="flex items-center gap-3">
+                                     <div className="flex items-center border border-slate-200 dark:border-neutral-600 rounded bg-white dark:bg-black">
+                                        <button type="button" onClick={() => handleUpdateItemQuantity(idx, item.quantity - 1)} className="px-3 py-1 text-slate-500 hover:bg-slate-50 dark:hover:bg-neutral-700 text-lg leading-none flex items-center justify-center">-</button>
+                                        <span className="px-2 py-1 text-xs font-medium text-slate-800 dark:text-neutral-200 min-w-[1.5rem] text-center">{item.quantity}</span>
+                                        <button type="button" onClick={() => handleUpdateItemQuantity(idx, item.quantity + 1)} className="px-3 py-1 text-slate-500 hover:bg-slate-50 dark:hover:bg-neutral-700 text-lg leading-none flex items-center justify-center">+</button>
+                                     </div>
+                                     <button type="button" onClick={() => handleRemoveItem(idx)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={16} /></button>
+                                 </div>
+                               )}
                              </div>
                           </div>
                         );
@@ -424,17 +434,21 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
                 <div>
                    <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Notes</label>
-                   <textarea className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm h-20 resize-none text-slate-900 dark:text-white"
+                   <textarea disabled={isReadOnly} className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm h-20 resize-none text-slate-900 dark:text-white"
                      value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} 
                      placeholder="Additional details about the job..."></textarea>
                 </div>
               </div>
 
               <div className="p-6 border-t border-slate-100 dark:border-neutral-800 flex justify-end gap-3 bg-slate-50 dark:bg-neutral-900/50 rounded-b-xl">
-                <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors">
-                  {editingRequest ? 'Update Request' : 'Create Request'}
+                <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors">
+                  {isReadOnly ? 'Close' : 'Cancel'}
                 </button>
+                {!isReadOnly && (
+                  <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors">
+                    {editingRequest ? 'Update Request' : 'Create Request'}
+                  </button>
+                )}
               </div>
             </form>
           </div>
