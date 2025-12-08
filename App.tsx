@@ -5,12 +5,12 @@ import {
   Package, 
   Users as UsersIcon, 
   Menu,
-  Settings,
   Droplets,
   Moon,
   Sun,
   LogOut,
-  Truck
+  Truck,
+  Loader2
 } from 'lucide-react';
 import { ServiceRequests } from './components/ServiceRequests';
 import { Dashboard } from './components/Dashboard';
@@ -18,7 +18,13 @@ import { Inventory } from './components/Inventory';
 import { Employees } from './components/Employees';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { Employee, Product, ServiceRequest, User } from './types';
-import { INITIAL_EMPLOYEES, INITIAL_PRODUCTS, INITIAL_REQUESTS, VEHICLES } from './constants';
+import { VEHICLES } from './constants';
+import { 
+  supabase, 
+  mapProductFromDB, mapProductToDB, 
+  mapEmployeeFromDB, mapEmployeeToDB, 
+  mapRequestFromDB, mapRequestToDB 
+} from './services/supabase';
 
 enum View {
   DASHBOARD = 'Dashboard',
@@ -32,14 +38,15 @@ export default function App() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [vehicleFilter, setVehicleFilter] = useState<string>('All Vehicles');
+  const [isLoading, setIsLoading] = useState(true);
   
   // Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-  // App Data State (Mocking a database)
-  const [requests, setRequests] = useState<ServiceRequest[]>(INITIAL_REQUESTS);
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
-  const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
+  // App Data State
+  const [requests, setRequests] = useState<ServiceRequest[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
   // Confirmation Modal State
   const [confirmState, setConfirmState] = useState<{
@@ -68,18 +75,80 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Auth Handler
-  const handleLogin = () => {
-    // Simulate Google Login
-    setCurrentUser({
-      name: 'Ravi Kumar',
-      email: 'ravi.k@upasnaborewells.com',
-      photoURL: 'https://ui-avatars.com/api/?name=Ravi+Kumar&background=0D8ABC&color=fff'
+  // Auth & Data Initialization
+  useEffect(() => {
+    // 1. Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setCurrentUser({
+          name: session.user.user_metadata.full_name || 'User',
+          email: session.user.email || '',
+          photoURL: session.user.user_metadata.avatar_url
+        });
+        fetchData();
+      } else {
+        setIsLoading(false);
+      }
     });
+
+    // 2. Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setCurrentUser({
+          name: session.user.user_metadata.full_name || 'User',
+          email: session.user.email || '',
+          photoURL: session.user.user_metadata.avatar_url
+        });
+        fetchData();
+      } else {
+        setCurrentUser(null);
+        setRequests([]);
+        setProducts([]);
+        setEmployees([]);
+        setIsLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [reqRes, prodRes, empRes] = await Promise.all([
+        supabase.from('service_requests').select('*').order('date', { ascending: false }),
+        supabase.from('products').select('*').order('name'),
+        supabase.from('employees').select('*').order('name')
+      ]);
+
+      if (reqRes.data) setRequests(reqRes.data.map(mapRequestFromDB));
+      if (prodRes.data) setProducts(prodRes.data.map(mapProductFromDB));
+      if (empRes.data) setEmployees(empRes.data.map(mapEmployeeFromDB));
+      
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
+  const handleLogin = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+    } catch (error) {
+      console.error("Login failed:", error);
+      alert("Failed to login. Please try again.");
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
 
   const toggleDarkMode = () => {
@@ -101,34 +170,110 @@ export default function App() {
     });
   };
 
-  // Handlers with Confirmation
-  const handleAddRequest = (req: ServiceRequest) => setRequests([req, ...requests]);
-  const handleUpdateRequest = (updatedReq: ServiceRequest) => setRequests(requests.map(r => r.id === updatedReq.id ? updatedReq : r));
+  // --- CRUD Operations ---
+
+  // Service Requests
+  const handleAddRequest = async (req: ServiceRequest) => {
+    const dbData = mapRequestToDB(req);
+    // Remove ID to let DB generate it
+    const { data, error } = await supabase.from('service_requests').insert(dbData).select().single();
+    if (error) {
+      console.error("Error adding request:", error);
+      return;
+    }
+    if (data) {
+      setRequests([mapRequestFromDB(data), ...requests]);
+    }
+  };
+
+  const handleUpdateRequest = async (updatedReq: ServiceRequest) => {
+    const dbData = mapRequestToDB(updatedReq);
+    const { error } = await supabase.from('service_requests').update(dbData).eq('id', updatedReq.id);
+    if (error) {
+      console.error("Error updating request:", error);
+      return;
+    }
+    setRequests(requests.map(r => r.id === updatedReq.id ? updatedReq : r));
+  };
+
   const handleDeleteRequest = (id: string) => {
     triggerConfirm(
       "Delete Service Request",
       "Are you sure you want to delete this service request? This action cannot be undone.",
-      () => setRequests(requests.filter(r => r.id !== id))
+      async () => {
+        const { error } = await supabase.from('service_requests').delete().eq('id', id);
+        if (!error) {
+          setRequests(requests.filter(r => r.id !== id));
+        }
+      }
     );
   };
 
-  const handleAddProduct = (p: Product) => setProducts([...products, p]);
-  const handleUpdateProduct = (p: Product) => setProducts(products.map(pr => pr.id === p.id ? p : pr));
+  // Products
+  const handleAddProduct = async (p: Product) => {
+    const dbData = mapProductToDB(p);
+    const { data, error } = await supabase.from('products').insert(dbData).select().single();
+    if (error) {
+      console.error("Error adding product:", error);
+      return;
+    }
+    if (data) {
+      setProducts([...products, mapProductFromDB(data)]);
+    }
+  };
+
+  const handleUpdateProduct = async (p: Product) => {
+    const dbData = mapProductToDB(p);
+    const { error } = await supabase.from('products').update(dbData).eq('id', p.id);
+    if (!error) {
+      setProducts(products.map(pr => pr.id === p.id ? p : pr));
+    }
+  };
+
   const handleDeleteProduct = (id: string) => {
     triggerConfirm(
       "Delete Product",
       "Are you sure you want to remove this product from inventory?",
-      () => setProducts(products.filter(p => p.id !== id))
+      async () => {
+        const { error } = await supabase.from('products').delete().eq('id', id);
+        if (!error) {
+          setProducts(products.filter(p => p.id !== id));
+        }
+      }
     );
   };
 
-  const handleAddEmployee = (e: Employee) => setEmployees([...employees, e]);
-  const handleUpdateEmployee = (e: Employee) => setEmployees(employees.map(emp => emp.id === e.id ? e : emp));
+  // Employees
+  const handleAddEmployee = async (e: Employee) => {
+    const dbData = mapEmployeeToDB(e);
+    const { data, error } = await supabase.from('employees').insert(dbData).select().single();
+    if (error) {
+      console.error("Error adding employee:", error);
+      return;
+    }
+    if (data) {
+      setEmployees([...employees, mapEmployeeFromDB(data)]);
+    }
+  };
+
+  const handleUpdateEmployee = async (e: Employee) => {
+    const dbData = mapEmployeeToDB(e);
+    const { error } = await supabase.from('employees').update(dbData).eq('id', e.id);
+    if (!error) {
+      setEmployees(employees.map(emp => emp.id === e.id ? e : emp));
+    }
+  };
+
   const handleDeleteEmployee = (id: string) => {
     triggerConfirm(
       "Remove Employee",
       "Are you sure you want to remove this employee record?",
-      () => setEmployees(employees.filter(e => e.id !== id))
+      async () => {
+        const { error } = await supabase.from('employees').delete().eq('id', id);
+        if (!error) {
+          setEmployees(employees.filter(e => e.id !== id));
+        }
+      }
     );
   };
 
@@ -155,6 +300,15 @@ export default function App() {
       setSidebarOpen(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-black">
+        <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
+        <p className="text-slate-500 dark:text-neutral-400 font-medium">Loading Upasna Manager...</p>
+      </div>
+    );
+  }
 
   // Login Screen
   if (!currentUser) {
@@ -254,7 +408,7 @@ export default function App() {
              <span>Sign Out</span>
            </button>
            <div className="px-4 py-2 text-xs text-slate-400 dark:text-neutral-600 text-center">
-             v1.4.0 &copy; 2024
+             v1.5.0 &copy; 2024
            </div>
         </div>
       </aside>
@@ -275,7 +429,7 @@ export default function App() {
                 </div>
               </div>
               
-              {/* Mobile Right: Just Profile (No Dark Mode Toggle here as requested) */}
+              {/* Mobile Right: Just Profile */}
               <div className="flex items-center gap-2 md:hidden">
                  <div className="h-9 w-9 rounded-full bg-slate-200 dark:bg-neutral-800 overflow-hidden border border-slate-300 dark:border-neutral-700">
                     {currentUser.photoURL ? (
