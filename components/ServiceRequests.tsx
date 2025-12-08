@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Product, ServiceRequest, ServiceStatus, ServiceType, ServiceItem, User } from '../types';
-import { Plus, Search, Filter, Edit2, Trash2, MessageCircle, X, Check, ArrowDown, ArrowUp, Truck } from 'lucide-react';
-import { generateCustomerMessage } from '../services/gemini';
+import { Plus, Search, Filter, Edit2, Trash2, X, Truck } from 'lucide-react';
 import { VEHICLES } from '../constants';
 
 interface ServiceRequestsProps {
@@ -145,18 +144,6 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     setEditingRequest(null);
   };
 
-  // Gemini Message Gen
-  const [generatedMsg, setGeneratedMsg] = useState<string | null>(null);
-  const [generatingMsg, setGeneratingMsg] = useState(false);
-
-  const handleGenerateMessage = async (req: ServiceRequest) => {
-    setGeneratingMsg(true);
-    setGeneratedMsg("Generating draft...");
-    const msg = await generateCustomerMessage(req, products);
-    setGeneratedMsg(msg);
-    setGeneratingMsg(false);
-  };
-
   // Filtering
   const filteredRequests = requests.filter(req => {
     const matchesSearch = req.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -283,10 +270,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               )}
             </div>
             
-            <div className="bg-slate-50 dark:bg-black/40 px-5 py-3 border-t border-slate-100 dark:border-neutral-800 flex justify-between items-center">
-               <button onClick={() => handleGenerateMessage(req)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 text-sm font-medium flex items-center gap-1 py-2">
-                  <MessageCircle size={16} /> Draft Msg
-               </button>
+            <div className="bg-slate-50 dark:bg-black/40 px-5 py-3 border-t border-slate-100 dark:border-neutral-800 flex justify-end items-center">
                <div className="flex gap-2">
                  <button onClick={() => openModal(req)} className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-blue-600 transition-colors">
                    <Edit2 size={16} />
@@ -303,28 +287,6 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
           </div>
         )}
       </div>
-
-      {/* Draft Message Modal */}
-      {generatedMsg && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-lg p-6 animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-neutral-800">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-slate-800 dark:text-white">AI Drafted Message</h3>
-                <button onClick={() => setGeneratedMsg(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"><X size={20} /></button>
-              </div>
-              <textarea 
-                readOnly 
-                className="w-full h-48 p-3 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm text-slate-700 dark:text-neutral-300 resize-none focus:outline-none"
-                value={generatedMsg}
-              />
-              <div className="mt-4 flex justify-end gap-3">
-                 <button onClick={() => {navigator.clipboard.writeText(generatedMsg); setGeneratedMsg(null);}} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
-                   Copy to Clipboard
-                 </button>
-              </div>
-           </div>
-        </div>
-      )}
 
       {/* Edit/Create Modal */}
       {isModalOpen && (

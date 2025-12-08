@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ServiceRequest, ServiceStatus, Employee } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { DollarSign, TrendingUp, Users, Activity, Sparkles, AlertCircle } from 'lucide-react';
-import { analyzeBusinessInsights } from '../services/gemini';
+import { DollarSign, TrendingUp, Users, Activity, AlertCircle } from 'lucide-react';
 
 interface DashboardProps {
   requests: ServiceRequest[];
@@ -13,9 +12,6 @@ interface DashboardProps {
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehicleFilter }) => {
-  const [insights, setInsights] = useState<string>('Click "Analyze" to get AI-powered insights...');
-  const [loadingInsights, setLoadingInsights] = useState(false);
-
   // Filter Data based on Vehicle
   const filteredRequests = vehicleFilter === 'All Vehicles' 
     ? requests 
@@ -53,14 +49,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehic
     }
     return acc;
   }, []);
-
-  const handleGenerateInsights = async () => {
-    setLoadingInsights(true);
-    setInsights("Analyzing data with Gemini...");
-    const result = await analyzeBusinessInsights(filteredRequests);
-    setInsights(result);
-    setLoadingInsights(false);
-  };
 
   if (filteredRequests.length === 0 && vehicleFilter !== 'All Vehicles') {
     return (
@@ -205,26 +193,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehic
                No data available
             </div>
           )}
-        </div>
-      </div>
-
-      {/* AI Insights */}
-      <div className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-950/40 dark:to-blue-950/40 p-6 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="text-indigo-600 dark:text-indigo-400" size={20} />
-            <h3 className="text-lg font-semibold text-indigo-900 dark:text-indigo-100">Gemini Business Insights</h3>
-          </div>
-          <button 
-            onClick={handleGenerateInsights}
-            disabled={loadingInsights}
-            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-          >
-            {loadingInsights ? 'Analyzing...' : 'Analyze Data'}
-          </button>
-        </div>
-        <div className="bg-white/60 dark:bg-black/40 p-4 rounded-lg text-indigo-900 dark:text-indigo-200 text-sm whitespace-pre-line leading-relaxed border border-indigo-50 dark:border-indigo-900/30">
-          {insights}
         </div>
       </div>
     </div>
