@@ -9,12 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2",
+    "@vercel/analytics": "^1.6.1",
+    "google-map-react": "^2.2.5",
+    "lucide-react": "^0.556.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "recharts": "^3.5.1",
-    "lucide-react": "^0.556.0",
-    "@supabase/supabase-js": "2",
-    "@vercel/analytics": "^1.6.1"
+    "recharts": "^3.5.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

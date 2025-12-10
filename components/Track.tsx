@@ -1,48 +1,65 @@
-import React, { useState } from 'react';
-import { MapPin, Truck, Clock, AlertCircle } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { MapPin, Truck, Clock, AlertCircle, Loader } from 'lucide-react';
+import GoogleMapReact from 'google-map-react';
+import { Employee, ServiceRequest, ServiceStatus } from '../types';
+import { VEHICLES } from '../constants';
 
 interface TrackedVehicle {
   id: string;
-  name: string;
+  vehicleName: string;
   driver: string;
-  latitude: number;
-  longitude: number;
+  driverId: string;
   lastUpdate: Date;
   status: 'active' | 'idle' | 'offline';
-  speed?: number;
+  assignedServiceId?: string;
+  serviceLocation?: string;
+  lat?: number;
+  lng?: number;
 }
 
-const mockVehicles: TrackedVehicle[] = [
-  {
-    id: '1',
-    name: 'Vehicle 001',
-    driver: 'John Doe',
-    latitude: 28.6139,
-    longitude: 77.2090,
-    lastUpdate: new Date(Date.now() - 5 * 60000), // 5 minutes ago
-    status: 'active',
-    speed: 45
-  },
-  {
-    id: '2',
-    name: 'Vehicle 002',
-    driver: 'Jane Smith',
-    latitude: 28.5355,
-    longitude: 77.3910,
-    lastUpdate: new Date(Date.now() - 15 * 60000), // 15 minutes ago
-    status: 'idle',
-    speed: 0
-  },
-  {
-    id: '3',
-    name: 'Vehicle 003',
-    driver: 'Mike Johnson',
-    latitude: 28.7041,
-    longitude: 77.1025,
-    lastUpdate: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-    status: 'offline',
+interface TrackProps {
+  employees: Employee[];
+  requests: ServiceRequest[];
+}
+
+interface MapCoordinates {
+  lat: number;
+  lng: number;
+}
+
+// Geocoding cache to avoid repeated requests
+const geocodingCache = new Map<string, MapCoordinates>();
+
+// Simple geocoding function using OpenStreetMap's Nominatim API (free, no key required)
+const geocodeLocation = async (location: string): Promise<MapCoordinates | undefined> => {
+  if (!location || location.trim() === '') return undefined;
+  
+  // Check cache first
+  if (geocodingCache.has(location)) {
+    return geocodingCache.get(location);
   }
-];
+
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`,
+      { headers: { 'User-Agent': 'Upasna-Borewells-App' } }
+    );
+    const data = await response.json();
+    
+    if (data && data.length > 0) {
+      const coordinates = {
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon)
+      };
+      geocodingCache.set(location, coordinates);
+      return coordinates;
+    }
+  } catch (error) {
+    console.error('Geocoding error:', error);
+  }
+  
+  return undefined;
+};
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -84,13 +101,143 @@ const formatLastUpdate = (date: Date) => {
   return date.toLocaleDateString();
 };
 
-export const Track = () => {
+// Vehicle marker component for the map
+const VehicleMarker = ({ 
+  vehicle, 
+  isSelected, 
+  onClick 
+}: { 
+  vehicle: TrackedVehicle; 
+  isSelected: boolean; 
+  onClick: () => void;
+}) => (
+  <div
+    onClick={onClick}
+    className={`cursor-pointer transition-all ${
+      isSelected ? 'scale-125' : 'hover:scale-110'
+    }`}
+    title={vehicle.vehicleName}
+  >
+    <div
+      className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold text-white shadow-lg border-2 border-white ${
+        isSelected ? 'ring-4 ring-blue-400' : ''
+      }`}
+      style={{
+        backgroundColor: getStatusColor2(vehicle.status),
+        boxShadow: `0 4px 12px ${getStatusColor2(vehicle.status)}60`
+      }}
+    >
+      <Truck size={20} />
+    </div>
+    <div className="absolute top-full mt-1 bg-white dark:bg-neutral-800 px-2 py-1 rounded text-xs font-semibold whitespace-nowrap shadow-md pointer-events-none border border-slate-200 dark:border-neutral-700">
+      {vehicle.vehicleName}
+    </div>
+  </div>
+);
+const formatLastUpdate = (date: Date) => {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} min ago`;
+  
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  
+  return date.toLocaleDateString();
+};
+
+export const Track = ({ employees, requests }: TrackProps) => {
   const [selectedVehicle, setSelectedVehicle] = useState<TrackedVehicle | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'idle' | 'offline'>('all');
+  const [isLoadingCoords, setIsLoadingCoords] = useState(false);
+  const [mapCenter, setMapCenter] = useState({ lat: 28.6139, lng: 77.2090 }); // Default to Delhi
+  const [mapZoom, setMapZoom] = useState(12);
+
+  // Generate vehicle data from employees and service requests
+  const vehicles = useMemo(() => {
+    const vehicleMap = new Map<string, TrackedVehicle>();
+
+    // Create a map of employees by their assigned vehicles
+    const employeesByVehicle = new Map<string, Employee>();
+    employees.forEach(emp => {
+      if (emp.assignedVehicle) {
+        employeesByVehicle.set(emp.assignedVehicle, emp);
+      }
+    });
+
+    // Create a map of active services by vehicle
+    const serviceByVehicle = new Map<string, ServiceRequest>();
+    requests.forEach(req => {
+      if (req.vehicle && req.status !== ServiceStatus.COMPLETED && req.status !== ServiceStatus.CANCELLED) {
+        serviceByVehicle.set(req.vehicle, req);
+      }
+    });
+
+    // Build vehicle list
+    VEHICLES.forEach(vehicleName => {
+      const employee = employeesByVehicle.get(vehicleName);
+      const service = serviceByVehicle.get(vehicleName);
+      
+      // Determine status based on active service
+      const status = service && service.status === ServiceStatus.IN_PROGRESS ? 'active' : 
+                     service ? 'idle' : 'offline';
+      
+      // Last update is when the service was created/updated or now if active
+      const lastUpdate = service ? new Date(service.date) : new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      vehicleMap.set(vehicleName, {
+        id: vehicleName.replace(/\s+/g, '-').toLowerCase(),
+        vehicleName,
+        driver: employee?.name || 'Unassigned',
+        driverId: employee?.id || '',
+        lastUpdate,
+        status,
+        assignedServiceId: service?.id,
+        serviceLocation: service?.location
+      });
+    });
+
+    return Array.from(vehicleMap.values());
+  }, [employees, requests]);
+
+  // Geocode vehicle locations
+  useEffect(() => {
+    const geocodeVehicles = async () => {
+      setIsLoadingCoords(true);
+      const vehiclesWithCoords = await Promise.all(
+        vehicles.map(async (vehicle) => {
+          if (vehicle.serviceLocation) {
+            const coords = await geocodeLocation(vehicle.serviceLocation);
+            return { ...vehicle, ...coords };
+          }
+          return vehicle;
+        })
+      );
+      
+      // Update vehicles with coordinates
+      const activeVehicles = vehiclesWithCoords.filter(v => v.lat !== undefined && v.lng !== undefined);
+      if (activeVehicles.length > 0) {
+        // Calculate center based on active vehicles
+        const avgLat = activeVehicles.reduce((sum, v) => sum + (v.lat || 0), 0) / activeVehicles.length;
+        const avgLng = activeVehicles.reduce((sum, v) => sum + (v.lng || 0), 0) / activeVehicles.length;
+        setMapCenter({ lat: avgLat, lng: avgLng });
+      }
+      
+      setIsLoadingCoords(false);
+    };
+
+    if (vehicles.length > 0) {
+      geocodeVehicles();
+    }
+  }, [vehicles]);
 
   const filteredVehicles = filterStatus === 'all' 
-    ? mockVehicles 
-    : mockVehicles.filter(v => v.status === filterStatus);
+    ? vehicles 
+    : vehicles.filter(v => v.status === filterStatus);
+
+  const vehiclesWithCoords = filteredVehicles.filter(v => v.lat !== undefined && v.lng !== undefined);
 
   return (
     <div className="space-y-6">
@@ -119,13 +266,45 @@ export const Track = () => {
         ))}
       </div>
 
-      {/* Map Notice */}
+      {/* Map Container */}
+      <div className="rounded-lg overflow-hidden border-2 border-slate-200 dark:border-neutral-800 bg-slate-100 dark:bg-neutral-800 relative">
+        {isLoadingCoords && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-50 dark:bg-neutral-900 z-10 rounded-lg">
+            <div className="flex flex-col items-center gap-2">
+              <Loader size={32} className="text-blue-600 animate-spin" />
+              <p className="text-slate-600 dark:text-neutral-400">Loading vehicle locations...</p>
+            </div>
+          </div>
+        )}
+        <div style={{ height: '500px', width: '100%' }}>
+          <GoogleMapReact
+            bootstrapURLKeys={{ key: 'AIzaSyBQPU8BV1vNr7S7i7Z5wL9cJc5Kz0xQ5D0' }}
+            center={mapCenter}
+            zoom={mapZoom}
+            onCenterChange={setMapCenter}
+            onZoomChange={setMapZoom}
+          >
+            {vehiclesWithCoords.map(vehicle => (
+              <VehicleMarker
+                key={vehicle.id}
+                vehicle={vehicle}
+                isSelected={selectedVehicle?.id === vehicle.id}
+                onClick={() => setSelectedVehicle(vehicle)}
+                lat={vehicle.lat!}
+                lng={vehicle.lng!}
+              />
+            ))}
+          </GoogleMapReact>
+        </div>
+      </div>
+
+      {/* Map Info */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex items-start gap-3">
         <AlertCircle size={20} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
         <div>
-          <h3 className="font-semibold text-blue-900 dark:text-blue-300">Map Integration</h3>
+          <h3 className="font-semibold text-blue-900 dark:text-blue-300">Real-time Tracking</h3>
           <p className="text-sm text-blue-800 dark:text-blue-400 mt-1">
-            Interactive map view is coming soon. For now, you can view vehicle locations and details below.
+            {vehiclesWithCoords.length} of {filteredVehicles.length} vehicles have location data. Locations are geocoded from service request addresses.
           </p>
         </div>
       </div>
@@ -148,7 +327,7 @@ export const Track = () => {
                 <div>
                   <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <Truck size={18} />
-                    {vehicle.name}
+                    {vehicle.vehicleName}
                   </h3>
                   <p className="text-sm text-slate-600 dark:text-neutral-400">Driver: {vehicle.driver}</p>
                 </div>
@@ -159,18 +338,26 @@ export const Track = () => {
             </div>
 
             <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2 text-slate-600 dark:text-neutral-400">
-                <MapPin size={16} />
-                <span>{vehicle.latitude.toFixed(4)}°, {vehicle.longitude.toFixed(4)}°</span>
-              </div>
+              {vehicle.serviceLocation && (
+                <div className="flex items-center gap-2 text-slate-600 dark:text-neutral-400">
+                  <MapPin size={16} />
+                  <span>{vehicle.serviceLocation}</span>
+                </div>
+              )}
               <div className="flex items-center gap-2 text-slate-600 dark:text-neutral-400">
                 <Clock size={16} />
                 <span>{formatLastUpdate(vehicle.lastUpdate)}</span>
               </div>
-              {vehicle.speed !== undefined && (
-                <div className="flex items-center gap-2 text-slate-600 dark:text-neutral-400">
-                  <span>⚡</span>
-                  <span>{vehicle.speed} km/h</span>
+              {vehicle.lat !== undefined && vehicle.lng !== undefined && (
+                <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-xs">
+                  <span>✓</span>
+                  <span>Coordinates found</span>
+                </div>
+              )}
+              {vehicle.assignedServiceId && (
+                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                  <span>📋</span>
+                  <span className="text-xs">Active Service</span>
                 </div>
               )}
             </div>
@@ -189,11 +376,11 @@ export const Track = () => {
       {selectedVehicle && (
         <div className="bg-slate-50 dark:bg-neutral-800 rounded-lg p-6 border border-slate-200 dark:border-neutral-700">
           <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-4">
-            {selectedVehicle.name} - Details
+            {selectedVehicle.vehicleName} - Details
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p className="text-sm text-slate-600 dark:text-neutral-400">Driver Name</p>
+              <p className="text-sm text-slate-600 dark:text-neutral-400">Assigned Driver</p>
               <p className="font-semibold text-slate-800 dark:text-white">{selectedVehicle.driver}</p>
             </div>
             <div>
@@ -202,26 +389,30 @@ export const Track = () => {
                 {selectedVehicle.status}
               </p>
             </div>
+            {selectedVehicle.serviceLocation && (
+              <div>
+                <p className="text-sm text-slate-600 dark:text-neutral-400">Current Service Location</p>
+                <p className="font-semibold text-slate-800 dark:text-white">{selectedVehicle.serviceLocation}</p>
+              </div>
+            )}
+            {selectedVehicle.lat !== undefined && selectedVehicle.lng !== undefined && (
+              <>
+                <div>
+                  <p className="text-sm text-slate-600 dark:text-neutral-400">Latitude</p>
+                  <p className="font-semibold text-slate-800 dark:text-white">{selectedVehicle.lat.toFixed(6)}°</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-600 dark:text-neutral-400">Longitude</p>
+                  <p className="font-semibold text-slate-800 dark:text-white">{selectedVehicle.lng.toFixed(6)}°</p>
+                </div>
+              </>
+            )}
             <div>
-              <p className="text-sm text-slate-600 dark:text-neutral-400">Latitude</p>
-              <p className="font-semibold text-slate-800 dark:text-white">{selectedVehicle.latitude.toFixed(6)}°</p>
-            </div>
-            <div>
-              <p className="text-sm text-slate-600 dark:text-neutral-400">Longitude</p>
-              <p className="font-semibold text-slate-800 dark:text-white">{selectedVehicle.longitude.toFixed(6)}°</p>
-            </div>
-            <div>
-              <p className="text-sm text-slate-600 dark:text-neutral-400">Last Updated</p>
+              <p className="text-sm text-slate-600 dark:text-neutral-400">Last Status Update</p>
               <p className="font-semibold text-slate-800 dark:text-white">
                 {selectedVehicle.lastUpdate.toLocaleString()}
               </p>
             </div>
-            {selectedVehicle.speed !== undefined && (
-              <div>
-                <p className="text-sm text-slate-600 dark:text-neutral-400">Speed</p>
-                <p className="font-semibold text-slate-800 dark:text-white">{selectedVehicle.speed} km/h</p>
-              </div>
-            )}
           </div>
         </div>
       )}

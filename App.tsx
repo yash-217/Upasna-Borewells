@@ -652,7 +652,7 @@ export default function App() {
           )}
           {currentView === View.TRACK && (
             <div className="animate-in fade-in duration-500">
-              <Track />
+              <Track employees={employees} requests={requests} />
             </div>
           )}
         </div>
