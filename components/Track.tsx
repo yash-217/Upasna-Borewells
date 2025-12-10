@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { MapPin, Truck, Clock, AlertCircle, Loader } from 'lucide-react';
 import { Employee, ServiceRequest, ServiceStatus } from '../types';
 import { VEHICLES } from '../constants';
+import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
 
 interface TrackedVehicle {
   id: string;
@@ -26,7 +27,10 @@ interface MapCoordinates {
   lng: number;
 }
 
-// Geocoding using Mappls API
+// Geocoding cache to avoid repeated API calls
+const geocodingCache = new Map<string, MapCoordinates>();
+
+// Geocoding using OpenStreetMap Nominatim API (free alternative)
 const geocodeLocation = async (location: string): Promise<MapCoordinates | undefined> => {
   if (!location || location.trim() === '') return undefined;
   
@@ -36,22 +40,16 @@ const geocodeLocation = async (location: string): Promise<MapCoordinates | undef
   }
 
   try {
-    const apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
-    if (!apiKey) {
-      console.error('Mappls API key not configured');
-      return undefined;
-    }
-
     const response = await fetch(
-      `https://apis.mappls.com/advancedmaps/v1/geocode?address=${encodeURIComponent(location)}&access_token=${apiKey}`
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json`
     );
     const data = await response.json();
     
-    if (data && data.results && data.results.length > 0) {
-      const result = data.results[0];
+    if (data && data.length > 0) {
+      const result = data[0];
       const coordinates = {
-        lat: parseFloat(result.latitude),
-        lng: parseFloat(result.longitude)
+        lat: parseFloat(result.lat),
+        lng: parseFloat(result.lon)
       };
       geocodingCache.set(location, coordinates);
       return coordinates;
@@ -73,6 +71,19 @@ const getStatusColor = (status: string) => {
       return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
     default:
       return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
+  }
+};
+
+const getStatusColor2 = (status: string): string => {
+  switch (status) {
+    case 'active':
+      return '#10b981'; // green-500
+    case 'idle':
+      return '#f59e0b'; // amber-500
+    case 'offline':
+      return '#ef4444'; // red-500
+    default:
+      return '#6b7280'; // gray-500
   }
 };
 
@@ -141,7 +152,7 @@ export const Track = ({ employees, requests }: TrackProps) => {
   const [selectedVehicle, setSelectedVehicle] = useState<TrackedVehicle | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'idle' | 'offline'>('all');
   const [isLoadingCoords, setIsLoadingCoords] = useState(false);
-  const [mapCenter, setMapCenter] = useState({ lat: 28.6139, lng: 77.2090 }); // Default to Delhi
+  const [mapCenter, setMapCenter] = useState({ lat: 19.8758, lng: 75.3393 }); // Default to Sambhajinagar
 
   // Generate vehicle data from employees and service requests
   const vehicles = useMemo(() => {
@@ -221,85 +232,14 @@ export const Track = ({ employees, requests }: TrackProps) => {
     }
   }, [vehicles]);
 
-  // Initialize Mappls map
-  useEffect(() => {
-    const initializeMap = async () => {
-      const apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
-      if (!apiKey) {
-        console.error('Mappls API key not configured');
-        return;
-      }
-
-      // Check if Mappls SDK is already loaded
-      if (typeof (window as any).mappls !== 'undefined') {
-        // SDK already loaded, initialize map
-        initMap();
-        return;
-      }
-
-      // Load Mappls SDK with callback
-      const script = document.createElement('script');
-      script.src = `https://sdk.mappls.com/map/sdk/web?v=3.0&access_token=${apiKey}&callback=initMapCallback`;
-      script.async = true;
-      script.defer = true;
-
-      // Define global callback for Mappls SDK
-      (window as any).initMapCallback = () => {
-        console.log('Mappls SDK loaded via callback');
-        initMap();
-      };
-
-      script.onerror = () => {
-        console.error('Failed to load Mappls SDK');
-      };
-
-      document.head.appendChild(script);
-    };
-
-    const initMap = () => {
-      if (typeof (window as any).mappls === 'undefined') {
-        console.error('Mappls SDK not available');
-        return;
-      }
-
-      try {
-        const mapElement = document.getElementById('map');
-        if (!mapElement) return;
-
-        const map = new (window as any).mappls.Map('map', {
-          center: [mapCenter.lat, mapCenter.lng],
-          zoom: 12,
-          zoomControl: true
-        });
-
-        // Add markers for vehicles with coordinates
-        vehiclesWithCoords.forEach(vehicle => {
-          if (vehicle.lat && vehicle.lng) {
-            try {
-              new (window as any).mappls.Marker({
-                map: map,
-                position: { lat: vehicle.lat, lng: vehicle.lng },
-                title: vehicle.vehicleName,
-                icon: 'https://apis.mappls.com/map_v3/marker/marker.png'
-              });
-            } catch (e) {
-              console.warn('Could not add marker:', e);
-            }
-          }
-        });
-      } catch (error) {
-        console.error('Error initializing Mappls map:', error);
-      }
-    };
-
-    initializeMap();
-  }, [mapCenter, vehiclesWithCoords]);
-
   const filteredVehicles = filterStatus === 'all' 
     ? vehicles 
     : vehicles.filter(v => v.status === filterStatus);
 
   const vehiclesWithCoords = filteredVehicles.filter(v => v.lat !== undefined && v.lng !== undefined);
+
+  // No need for manual map initialization with Google Maps
+  // The GoogleMap component handles it automatically
 
   return (
     <div className="space-y-6">
@@ -328,7 +268,7 @@ export const Track = ({ employees, requests }: TrackProps) => {
         ))}
       </div>
 
-      {/* Map Container - Mappls Map */}
+      {/* Map Container - Google Maps */}
       <div className="rounded-lg overflow-hidden border-2 border-slate-200 dark:border-neutral-800 bg-slate-100 dark:bg-neutral-800 relative">
         {isLoadingCoords && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-50 dark:bg-neutral-900 z-10 rounded-lg">
@@ -338,10 +278,34 @@ export const Track = ({ employees, requests }: TrackProps) => {
             </div>
           </div>
         )}
-        <div 
-          id="map"
-          style={{ height: '500px', width: '100%' }}
-        />
+        {(() => {
+          const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+          if (!googleMapsApiKey) {
+            return (
+              <div className="w-full h-[500px] flex items-center justify-center bg-slate-100 dark:bg-neutral-800">
+                <p className="text-red-600 font-semibold">Google Maps API key not configured</p>
+              </div>
+            );
+          }
+          return (
+            <LoadScript googleMapsApiKey={googleMapsApiKey}>
+              <GoogleMap
+                mapContainerStyle={{ width: '100%', height: '500px' }}
+                center={mapCenter}
+                zoom={12}
+              >
+                {vehiclesWithCoords.map(vehicle => (
+                  <Marker
+                    key={vehicle.id}
+                    position={{ lat: vehicle.lat!, lng: vehicle.lng! }}
+                    title={vehicle.vehicleName}
+                    onClick={() => setSelectedVehicle(vehicle)}
+                  />
+                ))}
+              </GoogleMap>
+            </LoadScript>
+          );
+        })()}
       </div>
 
       {/* Map Info */}
