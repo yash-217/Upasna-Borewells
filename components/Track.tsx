@@ -1,6 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MapPin, Truck, Clock, AlertCircle, Loader } from 'lucide-react';
-import GoogleMapReact from 'google-map-react';
 import { Employee, ServiceRequest, ServiceStatus } from '../types';
 import { VEHICLES } from '../constants';
 
@@ -140,7 +139,8 @@ export const Track = ({ employees, requests }: TrackProps) => {
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'idle' | 'offline'>('all');
   const [isLoadingCoords, setIsLoadingCoords] = useState(false);
   const [mapCenter, setMapCenter] = useState({ lat: 28.6139, lng: 77.2090 }); // Default to Delhi
-  const [mapZoom, setMapZoom] = useState(12);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<any>(null);
 
   // Generate vehicle data from employees and service requests
   const vehicles = useMemo(() => {
@@ -220,6 +220,54 @@ export const Track = ({ employees, requests }: TrackProps) => {
     }
   }, [vehicles]);
 
+  // Initialize Mappls map
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+
+    // Load Mappls SDK from CDN
+    const script = document.createElement('script');
+    script.src = 'https://apis.mappls.com/advancedmaps/v1/wgqlazpaguydcmcjmanelsdzoxvtsqyygdbd/map_load?v=1.0';
+    script.async = true;
+    script.defer = true;
+
+    script.onload = () => {
+      // Initialize map once SDK is loaded
+      const mapElement = mapContainerRef.current;
+      if (!mapElement) return;
+
+      const mapObj = new (window as any).mappls.Map(mapElement, {
+        center: [mapCenter.lng, mapCenter.lat],
+        zoomLevel: 12,
+        zoomControls: true,
+        search: false,
+        layers: 'raster',
+        style: 'standard'
+      });
+
+      mapRef.current = mapObj;
+
+      // Add markers for vehicles
+      vehiclesWithCoords.forEach(vehicle => {
+        if (vehicle.lat && vehicle.lng) {
+          new (window as any).mappls.Marker({
+            map: mapObj,
+            position: { lat: vehicle.lat, lng: vehicle.lng },
+            title: vehicle.vehicleName,
+            icon: '🚛'
+          });
+        }
+      });
+    };
+
+    document.head.appendChild(script);
+
+    return () => {
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    };
+  }, [vehiclesWithCoords, mapCenter]);
+
   const filteredVehicles = filterStatus === 'all' 
     ? vehicles 
     : vehicles.filter(v => v.status === filterStatus);
@@ -263,26 +311,10 @@ export const Track = ({ employees, requests }: TrackProps) => {
             </div>
           </div>
         )}
-        <div style={{ height: '500px', width: '100%' }}>
-          <GoogleMapReact
-            bootstrapURLKeys={{ key: 'AIzaSyBQPU8BV1vNr7S7i7Z5wL9cJc5Kz0xQ5D0' }}
-            center={mapCenter}
-            zoom={mapZoom}
-            onCenterChange={setMapCenter}
-            onZoomChange={setMapZoom}
-          >
-            {vehiclesWithCoords.map(vehicle => (
-              <VehicleMarker
-                key={vehicle.id}
-                vehicle={vehicle}
-                isSelected={selectedVehicle?.id === vehicle.id}
-                onClick={() => setSelectedVehicle(vehicle)}
-                lat={vehicle.lat!}
-                lng={vehicle.lng!}
-              />
-            ))}
-          </GoogleMapReact>
-        </div>
+        <div 
+          ref={mapContainerRef}
+          style={{ height: '500px', width: '100%' }}
+        />
       </div>
 
       {/* Map Info */}
