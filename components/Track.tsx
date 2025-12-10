@@ -26,10 +26,7 @@ interface MapCoordinates {
   lng: number;
 }
 
-// Geocoding cache to avoid repeated requests
-const geocodingCache = new Map<string, MapCoordinates>();
-
-// Simple geocoding function using OpenStreetMap's Nominatim API (free, no key required)
+// Geocoding using Mappls API
 const geocodeLocation = async (location: string): Promise<MapCoordinates | undefined> => {
   if (!location || location.trim() === '') return undefined;
   
@@ -39,16 +36,22 @@ const geocodeLocation = async (location: string): Promise<MapCoordinates | undef
   }
 
   try {
+    const apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
+    if (!apiKey) {
+      console.error('Mappls API key not configured');
+      return undefined;
+    }
+
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`,
-      { headers: { 'User-Agent': 'Upasna-Borewells-App' } }
+      `https://apis.mappls.com/advancedmaps/v1/geocode?address=${encodeURIComponent(location)}&key=${apiKey}`
     );
     const data = await response.json();
     
-    if (data && data.length > 0) {
+    if (data && data.results && data.results.length > 0) {
+      const result = data.results[0];
       const coordinates = {
-        lat: parseFloat(data[0].lat),
-        lng: parseFloat(data[0].lon)
+        lat: parseFloat(result.latitude),
+        lng: parseFloat(result.longitude)
       };
       geocodingCache.set(location, coordinates);
       return coordinates;
@@ -220,35 +223,60 @@ export const Track = ({ employees, requests }: TrackProps) => {
 
   // Initialize Mappls map
   useEffect(() => {
-    if (typeof (window as any).mappls === 'undefined') {
-      console.error('Mappls SDK not loaded');
-      return;
-    }
-
-    try {
-      const mapElement = document.getElementById('map');
-      if (!mapElement) return;
-
-      const map = new (window as any).mappls.Map('map', {
-        center: [mapCenter.lat, mapCenter.lng],
-        zoom: 12,
-        zoomControl: true
-      });
-
-      // Add markers for vehicles with coordinates
-      vehiclesWithCoords.forEach(vehicle => {
-        if (vehicle.lat && vehicle.lng) {
-          new (window as any).mappls.Marker({
-            map: map,
-            position: { lat: vehicle.lat, lng: vehicle.lng },
-            title: vehicle.vehicleName,
-            icon: 'https://apis.mappls.com/map_v3/marker/marker.png'
-          });
+    const initializeMap = async () => {
+      // Load Mappls SDK if not already loaded
+      if (typeof (window as any).mappls === 'undefined') {
+        const apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
+        if (!apiKey) {
+          console.error('Mappls API key not configured');
+          return;
         }
-      });
-    } catch (error) {
-      console.error('Error initializing Mappls map:', error);
-    }
+
+        const script = document.createElement('script');
+        script.src = `https://apis.mappls.com/advancedmaps/api/js?version=3.0&key=${apiKey}`;
+        script.async = true;
+        script.onload = () => {
+          // Map will be initialized in the next effect
+          console.log('Mappls SDK loaded');
+        };
+        script.onerror = () => {
+          console.error('Failed to load Mappls SDK');
+        };
+        document.head.appendChild(script);
+      } else {
+        // Mappls already loaded, initialize map
+        const mapElement = document.getElementById('map');
+        if (!mapElement || typeof (window as any).mappls === 'undefined') return;
+
+        try {
+          const map = new (window as any).mappls.Map('map', {
+            center: [mapCenter.lat, mapCenter.lng],
+            zoom: 12,
+            zoomControl: true
+          });
+
+          // Add markers for vehicles with coordinates
+          vehiclesWithCoords.forEach(vehicle => {
+            if (vehicle.lat && vehicle.lng) {
+              try {
+                new (window as any).mappls.Marker({
+                  map: map,
+                  position: { lat: vehicle.lat, lng: vehicle.lng },
+                  title: vehicle.vehicleName,
+                  icon: 'https://apis.mappls.com/map_v3/marker/marker.png'
+                });
+              } catch (e) {
+                console.warn('Could not add marker:', e);
+              }
+            }
+          });
+        } catch (error) {
+          console.error('Error initializing Mappls map:', error);
+        }
+      }
+    };
+
+    initializeMap();
   }, [mapCenter, vehiclesWithCoords]);
 
   const filteredVehicles = filterStatus === 'all' 
