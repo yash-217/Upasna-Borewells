@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MapPin, Truck, Clock, AlertCircle, Loader } from 'lucide-react';
 import { Employee, ServiceRequest, ServiceStatus } from '../types';
 import { VEHICLES } from '../constants';
@@ -139,8 +139,6 @@ export const Track = ({ employees, requests }: TrackProps) => {
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'idle' | 'offline'>('all');
   const [isLoadingCoords, setIsLoadingCoords] = useState(false);
   const [mapCenter, setMapCenter] = useState({ lat: 28.6139, lng: 77.2090 }); // Default to Delhi
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
 
   // Generate vehicle data from employees and service requests
   const vehicles = useMemo(() => {
@@ -222,76 +220,35 @@ export const Track = ({ employees, requests }: TrackProps) => {
 
   // Initialize Mappls map
   useEffect(() => {
-    if (!mapContainerRef.current) return;
+    if (typeof (window as any).mappls === 'undefined') {
+      console.error('Mappls SDK not loaded');
+      return;
+    }
 
-    const initializeMap = async () => {
-      try {
-        // Check if Mappls is available
-        if (typeof window !== 'undefined' && (window as any).mappls) {
-          const mapElement = mapContainerRef.current;
-          if (!mapElement) return;
+    try {
+      const mapElement = document.getElementById('map');
+      if (!mapElement) return;
 
-          const mapObj = new (window as any).mappls.Map(mapElement, {
-            center: [mapCenter.lng, mapCenter.lat],
-            zoomLevel: 12,
-            zoomControls: true,
-            search: false,
-            layers: 'raster',
-            style: 'standard'
+      const map = new (window as any).mappls.Map('map', {
+        center: [mapCenter.lat, mapCenter.lng],
+        zoom: 12,
+        zoomControl: true
+      });
+
+      // Add markers for vehicles with coordinates
+      vehiclesWithCoords.forEach(vehicle => {
+        if (vehicle.lat && vehicle.lng) {
+          new (window as any).mappls.Marker({
+            map: map,
+            position: { lat: vehicle.lat, lng: vehicle.lng },
+            title: vehicle.vehicleName,
+            icon: 'https://apis.mappls.com/map_v3/marker/marker.png'
           });
-
-          mapRef.current = mapObj;
-
-          // Add markers for vehicles
-          vehiclesWithCoords.forEach(vehicle => {
-            if (vehicle.lat && vehicle.lng) {
-              try {
-                new (window as any).mappls.Marker({
-                  map: mapObj,
-                  position: { lat: vehicle.lat, lng: vehicle.lng },
-                  title: vehicle.vehicleName
-                });
-              } catch (e) {
-                console.warn('Could not add marker:', e);
-              }
-            }
-          });
-        } else {
-          // Load Mappls SDK from CDN if not already loaded
-          const script = document.createElement('script');
-          script.src = 'https://apis.mappls.com/advancedmaps/v1/wgqlazpaguydcmcjmanelsdzoxvtsqyygdbd/map_load?v=1.0';
-          script.async = true;
-          script.defer = true;
-
-          script.onload = () => {
-            // Re-initialize map after script loads
-            setTimeout(() => {
-              if (mapContainerRef.current && (window as any).mappls) {
-                const mapObj = new (window as any).mappls.Map(mapContainerRef.current, {
-                  center: [mapCenter.lng, mapCenter.lat],
-                  zoomLevel: 12,
-                  zoomControls: true,
-                  search: false,
-                  layers: 'raster',
-                  style: 'standard'
-                });
-                mapRef.current = mapObj;
-              }
-            }, 500);
-          };
-
-          script.onerror = () => {
-            console.error('Failed to load Mappls SDK');
-          };
-
-          document.head.appendChild(script);
         }
-      } catch (error) {
-        console.error('Error initializing map:', error);
-      }
-    };
-
-    initializeMap();
+      });
+    } catch (error) {
+      console.error('Error initializing Mappls map:', error);
+    }
   }, [mapCenter, vehiclesWithCoords]);
 
   const filteredVehicles = filterStatus === 'all' 
@@ -327,7 +284,7 @@ export const Track = ({ employees, requests }: TrackProps) => {
         ))}
       </div>
 
-      {/* Map Container */}
+      {/* Map Container - Mappls Map */}
       <div className="rounded-lg overflow-hidden border-2 border-slate-200 dark:border-neutral-800 bg-slate-100 dark:bg-neutral-800 relative">
         {isLoadingCoords && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-50 dark:bg-neutral-900 z-10 rounded-lg">
@@ -338,7 +295,7 @@ export const Track = ({ employees, requests }: TrackProps) => {
           </div>
         )}
         <div 
-          ref={mapContainerRef}
+          id="map"
           style={{ height: '500px', width: '100%' }}
         />
       </div>
