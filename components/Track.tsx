@@ -224,69 +224,75 @@ export const Track = ({ employees, requests }: TrackProps) => {
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
-    // Load Mappls SDK from CDN
-    const script = document.createElement('script');
-    script.src = 'https://apis.mappls.com/advancedmaps/v1/wgqlazpaguydcmcjmanelsdzoxvtsqyygdbd/map_load?v=1.0';
-    script.async = true;
-    script.defer = true;
-
-    script.onload = () => {
+    const initializeMap = async () => {
       try {
-        // Initialize map once SDK is loaded
-        const mapElement = mapContainerRef.current;
-        if (!mapElement || !window.mappls) return;
+        // Check if Mappls is available
+        if (typeof window !== 'undefined' && (window as any).mappls) {
+          const mapElement = mapContainerRef.current;
+          if (!mapElement) return;
 
-        const mapObj = new window.mappls.Map(mapElement, {
-          center: [mapCenter.lng, mapCenter.lat],
-          zoomLevel: 12,
-          zoomControls: true,
-          search: false,
-          layers: 'raster',
-          style: 'standard'
-        });
-
-        mapRef.current = mapObj;
-      } catch (error) {
-        console.error('Error initializing Mappls map:', error);
-      }
-    };
-
-    script.onerror = () => {
-      console.error('Failed to load Mappls SDK');
-    };
-
-    document.head.appendChild(script);
-
-    return () => {
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
-  }, [mapCenter]);
-
-  // Add markers to map when vehicles change
-  useEffect(() => {
-    if (!mapRef.current || !window.mappls) return;
-
-    // Clear existing markers
-    const mapObj = mapRef.current;
-    
-    // Add markers for vehicles with coordinates
-    vehiclesWithCoords.forEach(vehicle => {
-      if (vehicle.lat && vehicle.lng) {
-        try {
-          new window.mappls.Marker({
-            map: mapObj,
-            position: { lat: vehicle.lat, lng: vehicle.lng },
-            title: vehicle.vehicleName,
-            icon: '🚛'
+          const mapObj = new (window as any).mappls.Map(mapElement, {
+            center: [mapCenter.lng, mapCenter.lat],
+            zoomLevel: 12,
+            zoomControls: true,
+            search: false,
+            layers: 'raster',
+            style: 'standard'
           });
-        } catch (error) {
-          console.error('Error adding marker:', error);
+
+          mapRef.current = mapObj;
+
+          // Add markers for vehicles
+          vehiclesWithCoords.forEach(vehicle => {
+            if (vehicle.lat && vehicle.lng) {
+              try {
+                new (window as any).mappls.Marker({
+                  map: mapObj,
+                  position: { lat: vehicle.lat, lng: vehicle.lng },
+                  title: vehicle.vehicleName
+                });
+              } catch (e) {
+                console.warn('Could not add marker:', e);
+              }
+            }
+          });
+        } else {
+          // Load Mappls SDK from CDN if not already loaded
+          const script = document.createElement('script');
+          script.src = 'https://apis.mappls.com/advancedmaps/v1/wgqlazpaguydcmcjmanelsdzoxvtsqyygdbd/map_load?v=1.0';
+          script.async = true;
+          script.defer = true;
+
+          script.onload = () => {
+            // Re-initialize map after script loads
+            setTimeout(() => {
+              if (mapContainerRef.current && (window as any).mappls) {
+                const mapObj = new (window as any).mappls.Map(mapContainerRef.current, {
+                  center: [mapCenter.lng, mapCenter.lat],
+                  zoomLevel: 12,
+                  zoomControls: true,
+                  search: false,
+                  layers: 'raster',
+                  style: 'standard'
+                });
+                mapRef.current = mapObj;
+              }
+            }, 500);
+          };
+
+          script.onerror = () => {
+            console.error('Failed to load Mappls SDK');
+          };
+
+          document.head.appendChild(script);
         }
+      } catch (error) {
+        console.error('Error initializing map:', error);
       }
-    });
-  }, [vehiclesWithCoords]);
+    };
+
+    initializeMap();
+  }, [mapCenter, vehiclesWithCoords]);
 
   const filteredVehicles = filterStatus === 'all' 
     ? vehicles 
