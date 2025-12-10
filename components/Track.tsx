@@ -231,32 +231,28 @@ export const Track = ({ employees, requests }: TrackProps) => {
     script.defer = true;
 
     script.onload = () => {
-      // Initialize map once SDK is loaded
-      const mapElement = mapContainerRef.current;
-      if (!mapElement) return;
+      try {
+        // Initialize map once SDK is loaded
+        const mapElement = mapContainerRef.current;
+        if (!mapElement || !window.mappls) return;
 
-      const mapObj = new (window as any).mappls.Map(mapElement, {
-        center: [mapCenter.lng, mapCenter.lat],
-        zoomLevel: 12,
-        zoomControls: true,
-        search: false,
-        layers: 'raster',
-        style: 'standard'
-      });
+        const mapObj = new window.mappls.Map(mapElement, {
+          center: [mapCenter.lng, mapCenter.lat],
+          zoomLevel: 12,
+          zoomControls: true,
+          search: false,
+          layers: 'raster',
+          style: 'standard'
+        });
 
-      mapRef.current = mapObj;
+        mapRef.current = mapObj;
+      } catch (error) {
+        console.error('Error initializing Mappls map:', error);
+      }
+    };
 
-      // Add markers for vehicles
-      vehiclesWithCoords.forEach(vehicle => {
-        if (vehicle.lat && vehicle.lng) {
-          new (window as any).mappls.Marker({
-            map: mapObj,
-            position: { lat: vehicle.lat, lng: vehicle.lng },
-            title: vehicle.vehicleName,
-            icon: '🚛'
-          });
-        }
-      });
+    script.onerror = () => {
+      console.error('Failed to load Mappls SDK');
     };
 
     document.head.appendChild(script);
@@ -266,7 +262,31 @@ export const Track = ({ employees, requests }: TrackProps) => {
         script.parentNode.removeChild(script);
       }
     };
-  }, [vehiclesWithCoords, mapCenter]);
+  }, [mapCenter]);
+
+  // Add markers to map when vehicles change
+  useEffect(() => {
+    if (!mapRef.current || !window.mappls) return;
+
+    // Clear existing markers
+    const mapObj = mapRef.current;
+    
+    // Add markers for vehicles with coordinates
+    vehiclesWithCoords.forEach(vehicle => {
+      if (vehicle.lat && vehicle.lng) {
+        try {
+          new window.mappls.Marker({
+            map: mapObj,
+            position: { lat: vehicle.lat, lng: vehicle.lng },
+            title: vehicle.vehicleName,
+            icon: '🚛'
+          });
+        } catch (error) {
+          console.error('Error adding marker:', error);
+        }
+      }
+    });
+  }, [vehiclesWithCoords]);
 
   const filteredVehicles = filterStatus === 'all' 
     ? vehicles 

@@ -1,6 +1,6 @@
 declare global {
   interface Window {
-    mappls: {
+    mappls?: {
       Map: new (element: HTMLElement, options: any) => any;
       Marker: new (options: any) => any;
     };
