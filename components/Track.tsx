@@ -134,19 +134,6 @@ const VehicleMarker = ({
     </div>
   </div>
 );
-const formatLastUpdate = (date: Date) => {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins} min ago`;
-  
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  
-  return date.toLocaleDateString();
-};
 
 export const Track = ({ employees, requests }: TrackProps) => {
   const [selectedVehicle, setSelectedVehicle] = useState<TrackedVehicle | null>(null);
