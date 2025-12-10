@@ -43,7 +43,7 @@ const geocodeLocation = async (location: string): Promise<MapCoordinates | undef
     }
 
     const response = await fetch(
-      `https://apis.mappls.com/advancedmaps/v1/geocode?address=${encodeURIComponent(location)}&key=${apiKey}`
+      `https://apis.mappls.com/advancedmaps/v1/geocode?address=${encodeURIComponent(location)}&access_token=${apiKey}`
     );
     const data = await response.json();
     
@@ -224,55 +224,71 @@ export const Track = ({ employees, requests }: TrackProps) => {
   // Initialize Mappls map
   useEffect(() => {
     const initializeMap = async () => {
-      // Load Mappls SDK if not already loaded
+      const apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
+      if (!apiKey) {
+        console.error('Mappls API key not configured');
+        return;
+      }
+
+      // Check if Mappls SDK is already loaded
+      if (typeof (window as any).mappls !== 'undefined') {
+        // SDK already loaded, initialize map
+        initMap();
+        return;
+      }
+
+      // Load Mappls SDK with callback
+      const script = document.createElement('script');
+      script.src = `https://sdk.mappls.com/map/sdk/web?v=3.0&access_token=${apiKey}&callback=initMapCallback`;
+      script.async = true;
+      script.defer = true;
+
+      // Define global callback for Mappls SDK
+      (window as any).initMapCallback = () => {
+        console.log('Mappls SDK loaded via callback');
+        initMap();
+      };
+
+      script.onerror = () => {
+        console.error('Failed to load Mappls SDK');
+      };
+
+      document.head.appendChild(script);
+    };
+
+    const initMap = () => {
       if (typeof (window as any).mappls === 'undefined') {
-        const apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
-        if (!apiKey) {
-          console.error('Mappls API key not configured');
-          return;
-        }
+        console.error('Mappls SDK not available');
+        return;
+      }
 
-        const script = document.createElement('script');
-        script.src = `https://apis.mappls.com/advancedmaps/api/js?version=3.0&key=${apiKey}`;
-        script.async = true;
-        script.onload = () => {
-          // Map will be initialized in the next effect
-          console.log('Mappls SDK loaded');
-        };
-        script.onerror = () => {
-          console.error('Failed to load Mappls SDK');
-        };
-        document.head.appendChild(script);
-      } else {
-        // Mappls already loaded, initialize map
+      try {
         const mapElement = document.getElementById('map');
-        if (!mapElement || typeof (window as any).mappls === 'undefined') return;
+        if (!mapElement) return;
 
-        try {
-          const map = new (window as any).mappls.Map('map', {
-            center: [mapCenter.lat, mapCenter.lng],
-            zoom: 12,
-            zoomControl: true
-          });
+        const map = new (window as any).mappls.Map('map', {
+          center: [mapCenter.lat, mapCenter.lng],
+          zoom: 12,
+          zoomControl: true
+        });
 
-          // Add markers for vehicles with coordinates
-          vehiclesWithCoords.forEach(vehicle => {
-            if (vehicle.lat && vehicle.lng) {
-              try {
-                new (window as any).mappls.Marker({
-                  map: map,
-                  position: { lat: vehicle.lat, lng: vehicle.lng },
-                  title: vehicle.vehicleName,
-                  icon: 'https://apis.mappls.com/map_v3/marker/marker.png'
-                });
-              } catch (e) {
-                console.warn('Could not add marker:', e);
-              }
+        // Add markers for vehicles with coordinates
+        vehiclesWithCoords.forEach(vehicle => {
+          if (vehicle.lat && vehicle.lng) {
+            try {
+              new (window as any).mappls.Marker({
+                map: map,
+                position: { lat: vehicle.lat, lng: vehicle.lng },
+                title: vehicle.vehicleName,
+                icon: 'https://apis.mappls.com/map_v3/marker/marker.png'
+              });
+            } catch (e) {
+              console.warn('Could not add marker:', e);
             }
-          });
-        } catch (error) {
-          console.error('Error initializing Mappls map:', error);
-        }
+          }
+        });
+      } catch (error) {
+        console.error('Error initializing Mappls map:', error);
       }
     };
 
