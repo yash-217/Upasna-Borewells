@@ -17,7 +17,6 @@ import { ServiceRequests } from './components/ServiceRequests';
 import { Dashboard } from './components/Dashboard';
 import { Inventory } from './components/Inventory';
 import { Employees } from './components/Employees';
-import { Track } from './components/Track';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { Employee, Product, ServiceRequest, User } from './types';
 import { VEHICLES } from './constants';
@@ -33,7 +32,6 @@ enum View {
   REQUESTS = 'Service Requests',
   INVENTORY = 'Inventory',
   EMPLOYEES = 'Employees',
-  TRACK = 'Track'
 }
 
 // --- Slick Splash Screen Component ---
@@ -497,8 +495,7 @@ export default function App() {
           <NavItem view={View.DASHBOARD} icon={LayoutDashboard} />
           <NavItem view={View.REQUESTS} icon={Wrench} />
           <NavItem view={View.INVENTORY} icon={Package} />
-          <NavItem view={View.EMPLOYEES} icon={UsersIcon} />
-          <NavItem view={View.TRACK} icon={MapPin} />
+          <NavItem view={View.EMPLOYEES} icon={UsersIcon} />          
         </nav>
 
         {/* Mobile specific label for sidebar */}
@@ -650,11 +647,6 @@ export default function App() {
               />
             </div>
           )}
-          {currentView === View.TRACK && (
-            <div className="animate-in fade-in duration-500">
-              <Track employees={employees} requests={requests} />
-            </div>
-          )}
         </div>
       </main>
 
@@ -664,7 +656,6 @@ export default function App() {
         <BottomNavItem view={View.REQUESTS} icon={Wrench} label="Requests" />
         <BottomNavItem view={View.INVENTORY} icon={Package} label="Stock" />
         <BottomNavItem view={View.EMPLOYEES} icon={UsersIcon} label="Team" />
-        <BottomNavItem view={View.TRACK} icon={MapPin} label="Track" />
       </div>
     </div>
   );
