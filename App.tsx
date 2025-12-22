@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  LayoutDashboard, 
-  Wrench, 
-  Package, 
-  Users as UsersIcon, 
+import {
+  LayoutDashboard,
+  Wrench,
+  Package,
+  Users as UsersIcon,
   Menu,
   Droplets,
   Moon,
@@ -20,11 +20,11 @@ import { Employees } from './components/Employees';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { Employee, Product, ServiceRequest, User } from './types';
 import { VEHICLES } from './constants';
-import { 
-  supabase, 
-  mapProductFromDB, mapProductToDB, 
-  mapEmployeeFromDB, mapEmployeeToDB, 
-  mapRequestFromDB, mapRequestToDB 
+import {
+  supabase,
+  mapProductFromDB, mapProductToDB,
+  mapEmployeeFromDB, mapEmployeeToDB,
+  mapRequestFromDB, mapRequestToDB
 } from './services/supabase';
 
 enum View {
@@ -33,7 +33,6 @@ enum View {
   INVENTORY = 'Inventory',
   EMPLOYEES = 'Employees',
 }
-
 // --- Slick Splash Screen Component ---
 const SplashScreen = () => (
   <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-50 dark:bg-black transition-colors duration-500">
