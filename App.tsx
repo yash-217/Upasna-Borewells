@@ -10,7 +10,8 @@ import {
   Sun,
   LogOut,
   Truck,
-  Eye
+  Eye,
+  MapPin
 } from 'lucide-react';
 import { ServiceRequests } from './components/ServiceRequests';
 import { Dashboard } from './components/Dashboard';
@@ -30,7 +31,7 @@ enum View {
   DASHBOARD = 'Dashboard',
   REQUESTS = 'Service Requests',
   INVENTORY = 'Inventory',
-  EMPLOYEES = 'Employees'
+  EMPLOYEES = 'Employees',
 }
 // --- Slick Splash Screen Component ---
 const SplashScreen = () => (
@@ -388,7 +389,7 @@ export default function App() {
         </div>
 
         <div className="bg-white dark:bg-neutral-900 p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-slate-100 dark:border-neutral-800">
-           <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Welcome Back</h2>
+           <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Welcome</h2>
            <p className="text-slate-500 dark:text-neutral-400 mb-8">Please sign in to access the dashboard</p>
            
            <button 
@@ -493,7 +494,7 @@ export default function App() {
           <NavItem view={View.DASHBOARD} icon={LayoutDashboard} />
           <NavItem view={View.REQUESTS} icon={Wrench} />
           <NavItem view={View.INVENTORY} icon={Package} />
-          <NavItem view={View.EMPLOYEES} icon={UsersIcon} />
+          <NavItem view={View.EMPLOYEES} icon={UsersIcon} />          
         </nav>
 
         {/* Mobile specific label for sidebar */}
@@ -649,7 +650,7 @@ export default function App() {
       </main>
 
       {/* Bottom Navigation (Mobile Only) */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-neutral-900 border-t border-slate-200 dark:border-neutral-800 pb-safe flex justify-around items-center z-40 h-16 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-neutral-900 border-t border-slate-200 dark:border-neutral-800 pb-safe flex justify-around items-center z-40 h-16 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] overflow-x-auto">
         <BottomNavItem view={View.DASHBOARD} icon={LayoutDashboard} label="Home" />
         <BottomNavItem view={View.REQUESTS} icon={Wrench} label="Requests" />
         <BottomNavItem view={View.INVENTORY} icon={Package} label="Stock" />
