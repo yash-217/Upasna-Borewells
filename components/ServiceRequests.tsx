@@ -94,9 +94,27 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       totalCost: calculateTotal(formData.items || [], depth, rate)
     });
   };
+  
+  const validateForm = (): boolean => {
+    if (!formData.customerName?.trim()) {
+      alert("Customer Name is required");
+      return false;
+    }
+    if (!formData.phone?.match(/^\d{10}$/)) {
+      alert("Please enter a valid 10-digit phone number");
+      return false;
+    }
+    if ((formData.totalCost || 0) < 0) {
+      alert("Total cost cannot be negative");
+      return false;
+    }
+    return true;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Add Validation Check
+    if (!validateForm()) return;
     const timestamp = new Date().toLocaleString();
     if (editingRequest) {
       onUpdateRequest({ 
