@@ -21,13 +21,15 @@ export const supabase = createClient(
 // --- Helper Functions (THE FIX IS HERE) ---
 
 // Safely parses a date string. If invalid or empty, returns NULL (for DB) or undefined.
-// This fixes the "date/time field value out of range" error.
+// This fixes the "date/time field value out of range" error by normalizing to ISO YYYY-MM-DD.
 const safeDateToDB = (dateStr: string | undefined): string | null => {
   if (!dateStr || dateStr.trim() === '') return null;
-  // Basic validation: Check if it looks like a date
-  const timestamp = Date.parse(dateStr);
-  if (isNaN(timestamp)) return null;
-  return dateStr;
+  
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return null;
+  
+  // Format as YYYY-MM-DD (ISO 8601) which Postgres universally accepts regardless of Datestyle
+  return date.toISOString().split('T')[0];
 };
 
 // Safely parses a number. If invalid, returns 0.
