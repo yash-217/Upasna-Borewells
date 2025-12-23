@@ -6,7 +6,6 @@ import {
 } from '../types';
 
 // Standardized Env Access for Vite
-// This relies on the variables being prefixed with VITE_ in your .env file
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -14,7 +13,6 @@ if (!supabaseUrl || !supabaseKey) {
   console.error('CRITICAL: Supabase URL or Anon Key is missing! Check your .env file.');
 }
 
-// Initialize client
 export const supabase = createClient(
   supabaseUrl || '', 
   supabaseKey || ''
@@ -26,10 +24,24 @@ export const supabase = createClient(
 const safeDateToDB = (dateStr: string | undefined): string | null => {
   if (!dateStr || dateStr.trim() === '') return null;
   
-  const date = new Date(dateStr);
+  // Try standard parsing first
+  let date = new Date(dateStr);
+  
+  // Handle DD/MM/YYYY format if standard parsing fails
+  if (isNaN(date.getTime()) && dateStr.includes('/')) {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+       // Swap to YYYY-MM-DD
+       const day = parts[0];
+       const month = parts[1];
+       const year = parts[2].split(',')[0].trim(); // Remove time part if present
+       date = new Date(`${year}-${month}-${day}`);
+    }
+  }
+
   if (isNaN(date.getTime())) return null;
   
-  // Format as YYYY-MM-DD (ISO 8601) which Postgres universally accepts
+  // Format as YYYY-MM-DD (ISO 8601)
   return date.toISOString().split('T')[0];
 };
 
@@ -37,17 +49,25 @@ const safeDateToDB = (dateStr: string | undefined): string | null => {
 const safeTimestampToDB = (dateStr: string | undefined): string | null => {
   if (!dateStr || dateStr.trim() === '') return null;
 
-  const date = new Date(dateStr);
+  // 1. Try standard parsing
+  let date = new Date(dateStr);
 
-  // If the browser can parse it (e.g. ISO string), use it
-  if (!isNaN(date.getTime())) {
-    return date.toISOString();
+  // 2. If standard parsing fails (e.g. "22/12/2025, 11:12:08 pm"), parse manually
+  if (isNaN(date.getTime())) {
+     // Check for DD/MM/YYYY format
+     if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
+        // We really just want "NOW" if it's a "Last Edited" timestamp that failed parsing.
+        // It's safer to generate a new timestamp than to try to parse a locale string perfectly.
+        return new Date().toISOString(); 
+     }
   }
 
-  // If parsing failed (likely a locale string like "22/12/2025..."), 
-  // we assume the user intended "Now", so we generate a fresh ISO timestamp.
-  // This is safe because 'lastEditedAt' is always set to 'now' when saving.
-  return new Date().toISOString();
+  // 3. Final check: if it's still invalid, return current time
+  if (isNaN(date.getTime())) {
+    return new Date().toISOString();
+  }
+
+  return date.toISOString();
 };
 
 // Safely parses a number. If invalid, returns 0.
@@ -61,7 +81,7 @@ const safeNumber = (num: any): number => {
 export const mapProductFromDB = (data: DBProduct): Product => ({
   id: data.id,
   name: data.name,
-  category: data.category as any, // Casts string to specific Union type
+  category: data.category as any,
   unitPrice: Number(data.unit_price) || 0,
   unit: data.unit,
   lastEditedBy: data.last_edited_by || undefined,
@@ -74,7 +94,7 @@ export const mapProductToDB = (p: Partial<Product>) => ({
   unit_price: safeNumber(p.unitPrice),
   unit: p.unit,
   last_edited_by: p.lastEditedBy,
-  last_edited_at: safeTimestampToDB(p.lastEditedAt) // <--- Fixed
+  last_edited_at: safeTimestampToDB(p.lastEditedAt)
 });
 
 export const mapEmployeeFromDB = (data: DBEmployee): Employee => ({
@@ -97,7 +117,7 @@ export const mapEmployeeToDB = (e: Partial<Employee>) => ({
   join_date: safeDateToDB(e.joinDate),
   assigned_vehicle: e.assignedVehicle,
   last_edited_by: e.lastEditedBy,
-  last_edited_at: safeTimestampToDB(e.lastEditedAt) // <--- Fixed
+  last_edited_at: safeTimestampToDB(e.lastEditedAt)
 });
 
 export const mapRequestFromDB = (data: DBServiceRequest): ServiceRequest => ({
@@ -113,7 +133,6 @@ export const mapRequestFromDB = (data: DBServiceRequest): ServiceRequest => ({
   totalCost: Number(data.total_cost) || 0,
   drillingDepth: Number(data.drilling_depth) || 0,
   drillingRate: Number(data.drilling_rate) || 0,
-  // Ensure items is an array even if DB returns null/undefined
   items: Array.isArray(data.items) ? data.items : [], 
   lastEditedBy: data.last_edited_by || undefined,
   lastEditedAt: data.last_edited_at || undefined
@@ -133,5 +152,5 @@ export const mapRequestToDB = (r: Partial<ServiceRequest>) => ({
   drilling_rate: safeNumber(r.drillingRate),
   items: r.items,
   last_edited_by: r.lastEditedBy,
-  last_edited_at: safeTimestampToDB(r.lastEditedAt) // <--- Fixed
+  last_edited_at: safeTimestampToDB(r.lastEditedAt)
 });
