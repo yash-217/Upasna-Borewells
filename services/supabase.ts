@@ -20,6 +20,42 @@ export const supabase = createClient(
   supabaseKey || ''
 );
 
+// --- Helper Functions ---
+
+// Safely parses a date string. If invalid or empty, returns NULL (for DB).
+const safeDateToDB = (dateStr: string | undefined): string | null => {
+  if (!dateStr || dateStr.trim() === '') return null;
+  
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return null;
+  
+  // Format as YYYY-MM-DD (ISO 8601) which Postgres universally accepts
+  return date.toISOString().split('T')[0];
+};
+
+// Safely parses a timestamp. Fixes "date/time field value out of range" error.
+const safeTimestampToDB = (dateStr: string | undefined): string | null => {
+  if (!dateStr || dateStr.trim() === '') return null;
+
+  const date = new Date(dateStr);
+
+  // If the browser can parse it (e.g. ISO string), use it
+  if (!isNaN(date.getTime())) {
+    return date.toISOString();
+  }
+
+  // If parsing failed (likely a locale string like "22/12/2025..."), 
+  // we assume the user intended "Now", so we generate a fresh ISO timestamp.
+  // This is safe because 'lastEditedAt' is always set to 'now' when saving.
+  return new Date().toISOString();
+};
+
+// Safely parses a number. If invalid, returns 0.
+const safeNumber = (num: any): number => {
+  const parsed = Number(num);
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 // --- Data Mappers (DB snake_case <-> App camelCase) ---
 
 export const mapProductFromDB = (data: DBProduct): Product => ({
@@ -35,10 +71,10 @@ export const mapProductFromDB = (data: DBProduct): Product => ({
 export const mapProductToDB = (p: Partial<Product>) => ({
   name: p.name,
   category: p.category,
-  unit_price: p.unitPrice,
+  unit_price: safeNumber(p.unitPrice),
   unit: p.unit,
   last_edited_by: p.lastEditedBy,
-  last_edited_at: p.lastEditedAt
+  last_edited_at: safeTimestampToDB(p.lastEditedAt) // <--- Fixed
 });
 
 export const mapEmployeeFromDB = (data: DBEmployee): Employee => ({
@@ -57,11 +93,11 @@ export const mapEmployeeToDB = (e: Partial<Employee>) => ({
   name: e.name,
   role: e.role,
   phone: e.phone,
-  salary: e.salary,
-  join_date: e.joinDate,
+  salary: safeNumber(e.salary),
+  join_date: safeDateToDB(e.joinDate),
   assigned_vehicle: e.assignedVehicle,
   last_edited_by: e.lastEditedBy,
-  last_edited_at: e.lastEditedAt
+  last_edited_at: safeTimestampToDB(e.lastEditedAt) // <--- Fixed
 });
 
 export const mapRequestFromDB = (data: DBServiceRequest): ServiceRequest => ({
@@ -87,15 +123,15 @@ export const mapRequestToDB = (r: Partial<ServiceRequest>) => ({
   customer_name: r.customerName,
   phone: r.phone,
   location: r.location,
-  date: r.date,
+  date: safeDateToDB(r.date),
   type: r.type,
   status: r.status,
   vehicle: r.vehicle,
   notes: r.notes,
-  total_cost: r.totalCost,
-  drilling_depth: r.drillingDepth,
-  drilling_rate: r.drillingRate,
+  total_cost: safeNumber(r.totalCost),
+  drilling_depth: safeNumber(r.drillingDepth),
+  drilling_rate: safeNumber(r.drillingRate),
   items: r.items,
   last_edited_by: r.lastEditedBy,
-  last_edited_at: r.lastEditedAt
+  last_edited_at: safeTimestampToDB(r.lastEditedAt) // <--- Fixed
 });
