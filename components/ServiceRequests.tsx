@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Product, ServiceRequest, ServiceStatus, ServiceType, ServiceItem, User } from '../types';
-import { Plus, Search, Filter, Edit2, Trash2, X, Truck, Eye } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, X, Truck, Eye, MapPin } from 'lucide-react';
 import { VEHICLES } from '../constants';
 
 interface ServiceRequestsProps {
@@ -21,6 +21,72 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   const [editingRequest, setEditingRequest] = useState<ServiceRequest | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+
+  // Map State & Refs
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [pickedLocation, setPickedLocation] = useState<{lat: number, lng: number} | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<any>(null);
+  const markerInstance = useRef<any>(null);
+
+  const loadMapplsScript = () => {
+    return new Promise((resolve, reject) => {
+      if (window.mappls) {
+        resolve(window.mappls);
+        return;
+      }
+      const script = document.createElement('script');
+      const apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
+      if (!apiKey) {
+        reject(new Error("VITE_MAPPLS_API_KEY is missing"));
+        return;
+      }
+      script.src = `https://apis.mappls.com/advancedmaps/api/${apiKey}/map_sdk?layer=vector&v=3.0`;
+      script.async = true;
+      script.onload = () => resolve(window.mappls);
+      script.onerror = () => reject(new Error("Failed to load Mappls SDK"));
+      document.body.appendChild(script);
+    });
+  };
+
+  useEffect(() => {
+    if (isMapOpen && mapContainerRef.current && !mapInstance.current) {
+        loadMapplsScript().then((mappls: any) => {
+             // Default to India center or current location if available
+             const defaultCenter = { lat: 20.5937, lng: 78.9629 };
+             
+             mapInstance.current = new mappls.Map(mapContainerRef.current, {
+                center: defaultCenter,
+                zoom: 5
+             });
+             
+             mapInstance.current.addListener('click', (e: any) => {
+                 // Mappls event structure might vary, but usually e.lngLat contains {lat, lng}
+                 const lat = e.lngLat ? e.lngLat.lat : e.latLng.lat(); 
+                 const lng = e.lngLat ? e.lngLat.lng : e.latLng.lng();
+                 setPickedLocation({ lat, lng });
+                 
+                 if (markerInstance.current) {
+                     markerInstance.current.setPosition({ lat, lng });
+                 } else {
+                     markerInstance.current = new mappls.Marker({
+                         map: mapInstance.current,
+                         position: { lat, lng }
+                     });
+                 }
+             });
+        }).catch(err => console.error("Failed to load Mappls:", err));
+    }
+    // Cleanup if needed, though Mappls cleanup is tricky without destroying DOM
+  }, [isMapOpen]);
+
+  const handleConfirmLocation = () => {
+      if (pickedLocation) {
+          // Format as "Lat, Lng" string since we don't have reverse geocoding API key guaranteed
+          setFormData({ ...formData, location: `${pickedLocation.lat.toFixed(6)}, ${pickedLocation.lng.toFixed(6)}` });
+      }
+      setIsMapOpen(false);
+  };
   
   // Form State
   const [formData, setFormData] = useState<Partial<ServiceRequest>>({
@@ -341,8 +407,15 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Location</label>
-                    <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                      value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
+                    <div className="flex gap-2">
+                      <input disabled={isReadOnly} required type="text" className="flex-1 bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                        value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} placeholder="Address or Coordinates" />
+                      {!isReadOnly && (
+                        <button type="button" onClick={() => setIsMapOpen(true)} className="px-3 py-2 bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-neutral-700 rounded-lg hover:bg-slate-200 dark:hover:bg-neutral-700 transition-colors" title="Pick on Map">
+                           <MapPin size={18} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Service Type</label>
@@ -473,6 +546,40 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                 )}
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Map Picker Modal */}
+      {isMapOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-3xl h-[500px] flex flex-col animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-neutral-800">
+            <div className="p-4 border-b border-slate-100 dark:border-neutral-800 flex justify-between items-center bg-white dark:bg-neutral-900 rounded-t-xl">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white">Pick Location</h3>
+              <button onClick={() => setIsMapOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"><X size={24} /></button>
+            </div>
+            
+            <div className="flex-1 relative bg-slate-100 dark:bg-neutral-800">
+               <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+               {!mapInstance.current && (
+                 <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-neutral-400">
+                    Loading Map...
+                 </div>
+               )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 dark:border-neutral-800 flex justify-between items-center bg-slate-50 dark:bg-neutral-900/50 rounded-b-xl">
+              <div className="text-sm text-slate-600 dark:text-neutral-400">
+                 {pickedLocation ? `Selected: ${pickedLocation.lat.toFixed(5)}, ${pickedLocation.lng.toFixed(5)}` : 'Click on map to select location'}
+              </div>
+              <div className="flex gap-3">
+                 <button onClick={() => setIsMapOpen(false)} className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors">
+                   Cancel
+                 </button>
+                 <button onClick={handleConfirmLocation} disabled={!pickedLocation} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                   Confirm Location
+                 </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
