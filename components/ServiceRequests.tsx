@@ -175,23 +175,27 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
   // Sorting Logic
   const sortedRequests = [...filteredRequests].sort((a, b) => {
-    const activeStatuses = [ServiceStatus.PENDING, ServiceStatus.IN_PROGRESS];
-    const isActiveA = activeStatuses.includes(a.status);
-    const isActiveB = activeStatuses.includes(b.status);
-    
-    // Always show active requests before inactive ones if mixed
-    if (isActiveA && !isActiveB) return -1;
-    if (!isActiveA && isActiveB) return 1;
+    const statusPriority: Record<ServiceStatus, number> = {
+      [ServiceStatus.PENDING]: 1,
+      [ServiceStatus.IN_PROGRESS]: 2,
+      [ServiceStatus.COMPLETED]: 3,
+      [ServiceStatus.CANCELLED]: 4
+    };
+
+    const priorityA = statusPriority[a.status] || 99;
+    const priorityB = statusPriority[b.status] || 99;
+
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
 
     const dateA = new Date(a.date).getTime();
     const dateB = new Date(b.date).getTime();
 
-    if (isActiveA) {
-      // Active: Oldest first
-      return dateA - dateB;
+    if (a.status === ServiceStatus.PENDING) {
+      return dateA - dateB; // Oldest to newest
     } else {
-      // Inactive: Newest first
-      return dateB - dateA;
+      return dateB - dateA; // Newest first
     }
   });
 
@@ -235,7 +239,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
+      <div className="flex flex-col gap-4">
         {sortedRequests.length > 0 ? sortedRequests.map(req => (
           <div key={req.id} className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col hover:shadow-md transition-shadow group">
             <div className="p-5 flex-1">
@@ -304,7 +308,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             </div>
           </div>
         )) : (
-          <div className="col-span-full py-10 text-center text-slate-400 dark:text-neutral-500">
+          <div className="py-10 text-center text-slate-400 dark:text-neutral-500">
              No service requests found.
           </div>
         )}
