@@ -48,7 +48,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         reject(new Error("VITE_MAPPLS_API_KEY is missing"));
         return;
       }
-      script.src = `https://apis.mappls.com/advancedmaps/api/${apiKey}/map_sdk?layer=vector&v=3.0`;
+      script.src = `https://apis.mappls.com/advancedmaps/api/v3/map_sdk?layer=vector&v=3.0&access_token=${apiKey}`;
       script.async = true;
       script.onload = () => resolve(window.mappls);
       script.onerror = () => reject(new Error("Failed to load Mappls SDK"));
