@@ -133,6 +133,11 @@ export const mapRequestFromDB = (data: DBServiceRequest): ServiceRequest => ({
   totalCost: Number(data.total_cost) || 0,
   drillingDepth: Number(data.drilling_depth) || 0,
   drillingRate: Number(data.drilling_rate) || 0,
+  casingDepth: Number(data.casing_depth) || 0,
+  casingRate: Number(data.casing_rate) || 0,
+  casingType: data.casing_type || undefined,
+  casing10Depth: Number(data.casing10_depth) || 0,
+  casing10Rate: Number(data.casing10_rate) || 0,
   items: Array.isArray(data.items) ? data.items : [], 
   lastEditedBy: data.last_edited_by || undefined,
   lastEditedAt: data.last_edited_at || undefined
@@ -150,6 +155,11 @@ export const mapRequestToDB = (r: Partial<ServiceRequest>) => ({
   total_cost: safeNumber(r.totalCost),
   drilling_depth: safeNumber(r.drillingDepth),
   drilling_rate: safeNumber(r.drillingRate),
+  casing_depth: safeNumber(r.casingDepth),
+  casing_rate: safeNumber(r.casingRate),
+  casing_type: r.casingType || null,
+  casing10_depth: safeNumber(r.casing10Depth),
+  casing10_rate: safeNumber(r.casing10Rate),
   items: r.items,
   last_edited_by: r.lastEditedBy,
   last_edited_at: safeTimestampToDB(r.lastEditedAt)
