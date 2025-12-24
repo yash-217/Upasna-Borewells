@@ -132,7 +132,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       setIsMapOpen(false);
   };
   
-  // Form State
+  // Form State - Simplified now that ServiceRequest has all fields
   const [formData, setFormData] = useState<Partial<ServiceRequest>>({
     customerName: '',
     phone: '',
@@ -145,14 +145,21 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     notes: '',
     totalCost: 0,
     drillingDepth: 0,
-    drillingRate: 0
+    drillingRate: 0,
+    casingDepth: 0,
+    casingRate: 0,
+    casingType: '7"',
+    casing10Depth: 0,
+    casing10Rate: 0
   });
 
   // Helper to calculate total cost
-  const calculateTotal = (items: ServiceItem[], depth: number = 0, rate: number = 0) => {
-    const itemsTotal = items.reduce((sum, item) => sum + (item.quantity * item.priceAtTime), 0);
-    const drillingTotal = depth * rate;
-    return itemsTotal + drillingTotal;
+  const calculateTotal = (data: typeof formData) => {
+    const itemsTotal = (data.items || []).reduce((sum, item) => sum + (item.quantity * item.priceAtTime), 0);
+    const drillingTotal = (data.drillingDepth || 0) * (data.drillingRate || 0);
+    const casingTotal = (data.casingDepth || 0) * (data.casingRate || 0);
+    const casing10Total = (data.casing10Depth || 0) * (data.casing10Rate || 0);
+    return itemsTotal + drillingTotal + casingTotal + casing10Total;
   };
 
   const handleAddItem = (productId: string) => {
@@ -168,20 +175,27 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       newItems.push({ productId, quantity: 1, priceAtTime: product.unitPrice });
     }
 
-    setFormData({
+    const updatedFormData = {
       ...formData,
-      items: newItems,
-      totalCost: calculateTotal(newItems, formData.drillingDepth, formData.drillingRate)
+      items: newItems
+    };
+
+    setFormData({
+      ...updatedFormData,
+      totalCost: calculateTotal(updatedFormData)
     });
   };
 
   const handleRemoveItem = (index: number) => {
     const newItems = [...(formData.items || [])];
     newItems.splice(index, 1);
-    setFormData({
+    const updatedFormData = {
       ...formData,
-      items: newItems,
-      totalCost: calculateTotal(newItems, formData.drillingDepth, formData.drillingRate)
+      items: newItems
+    };
+    setFormData({
+      ...updatedFormData,
+      totalCost: calculateTotal(updatedFormData)
     });
   };
 
@@ -189,19 +203,50 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     if (quantity < 1) return;
     const newItems = [...(formData.items || [])];
     newItems[index].quantity = quantity;
-    setFormData({
+    const updatedFormData = {
       ...formData,
-      items: newItems,
-      totalCost: calculateTotal(newItems, formData.drillingDepth, formData.drillingRate)
+      items: newItems
+    };
+    setFormData({
+      ...updatedFormData,
+      totalCost: calculateTotal(updatedFormData)
     });
   };
 
   const handleDrillingChange = (depth: number, rate: number) => {
-    setFormData({
+    const updatedFormData = {
       ...formData,
       drillingDepth: depth,
-      drillingRate: rate,
-      totalCost: calculateTotal(formData.items || [], depth, rate)
+      drillingRate: rate
+    };
+    setFormData({
+      ...updatedFormData,
+      totalCost: calculateTotal(updatedFormData)
+    });
+  };
+
+  const handleCasingChange = (depth: number, rate: number, type: string) => {
+    const updatedFormData = {
+      ...formData,
+      casingDepth: depth,
+      casingRate: rate,
+      casingType: type
+    };
+    setFormData({
+      ...updatedFormData,
+      totalCost: calculateTotal(updatedFormData)
+    });
+  };
+
+  const handleCasing10Change = (depth: number, rate: number) => {
+    const updatedFormData = {
+      ...formData,
+      casing10Depth: depth,
+      casing10Rate: rate
+    };
+    setFormData({
+      ...updatedFormData,
+      totalCost: calculateTotal(updatedFormData)
     });
   };
   
@@ -263,7 +308,12 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         notes: '',
         totalCost: 0,
         drillingDepth: 0,
-        drillingRate: 0
+        drillingRate: 0,
+        casingDepth: 0,
+        casingRate: 0,
+        casingType: '7"',
+        casing10Depth: 0,
+        casing10Rate: 0
       });
     }
     setIsModalOpen(true);
@@ -391,6 +441,18 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                     <span className="text-slate-700 dark:text-neutral-200">{req.drillingDepth}ft @ ₹{req.drillingRate}/ft</span>
                   </div>
                 )}
+                {(req.casingDepth || 0) > 0 && (
+                  <div className="text-sm flex justify-between">
+                    <span className="text-slate-500 dark:text-neutral-400">Casing ({req.casingType || '7"'}):</span>
+                    <span className="text-slate-700 dark:text-neutral-200">{req.casingDepth}ft @ ₹{req.casingRate}/ft</span>
+                  </div>
+                )}
+                {(req.casing10Depth || 0) > 0 && (
+                  <div className="text-sm flex justify-between">
+                    <span className="text-slate-500 dark:text-neutral-400">10" Casing:</span>
+                    <span className="text-slate-700 dark:text-neutral-200">{req.casing10Depth}ft @ ₹{req.casing10Rate}/ft</span>
+                  </div>
+                )}
                  <div className="text-sm flex justify-between pt-2 border-t border-slate-100 dark:border-neutral-800">
                   <span className="text-slate-500 dark:text-neutral-400 font-medium">Total:</span>
                   <span className="text-blue-600 dark:text-blue-400 font-bold">₹{req.totalCost.toLocaleString()}</span>
@@ -496,17 +558,68 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                      <div>
                         <label className="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Depth (ft)</label>
                         <input disabled={isReadOnly} type="number" min="0" className="w-full bg-white dark:bg-black border border-blue-200 dark:border-blue-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
-                          value={formData.drillingDepth} onChange={e => handleDrillingChange(Number(e.target.value), formData.drillingRate || 0)} />
+                          value={formData.drillingDepth || ''} onChange={e => handleDrillingChange(Number(e.target.value), formData.drillingRate || 0)} />
                      </div>
                      <div>
                         <label className="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Rate (₹/ft)</label>
                         <input disabled={isReadOnly} type="number" min="0" className="w-full bg-white dark:bg-black border border-blue-200 dark:border-blue-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
-                          value={formData.drillingRate} onChange={e => handleDrillingChange(formData.drillingDepth || 0, Number(e.target.value))} />
+                          value={formData.drillingRate || ''} onChange={e => handleDrillingChange(formData.drillingDepth || 0, Number(e.target.value))} />
                      </div>
                   </div>
                   <div className="mt-2 text-right text-sm text-blue-700 dark:text-blue-400 font-medium">
                      Drilling Total: ₹{((formData.drillingDepth || 0) * (formData.drillingRate || 0)).toLocaleString()}
                   </div>
+                </div>
+
+                {/* Casing Pipe Details */}
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg border border-emerald-100 dark:border-emerald-900/30">
+                   <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-semibold text-emerald-900 dark:text-emerald-300 text-sm">Casing Pipe Details</h4>
+                      <select 
+                         disabled={isReadOnly}
+                         className="bg-white dark:bg-black border border-emerald-200 dark:border-emerald-800/50 rounded px-2 py-1 text-xs text-emerald-900 dark:text-emerald-100 focus:outline-none"
+                         value={formData.casingType || '7"'}
+                         onChange={(e) => handleCasingChange(formData.casingDepth || 0, formData.casingRate || 0, e.target.value)}
+                      >
+                         <option value='7"'>7" Pipe</option>
+                         <option value='8"'>8" Pipe</option>
+                      </select>
+                   </div>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div>
+                         <label className="block text-xs font-medium text-emerald-800 dark:text-emerald-200 mb-1">Depth (ft)</label>
+                         <input disabled={isReadOnly} type="number" min="0" className="w-full bg-white dark:bg-black border border-emerald-200 dark:border-emerald-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
+                           value={formData.casingDepth || ''} onChange={e => handleCasingChange(Number(e.target.value), formData.casingRate || 0, formData.casingType || '7"')} />
+                      </div>
+                      <div>
+                         <label className="block text-xs font-medium text-emerald-800 dark:text-emerald-200 mb-1">Rate (₹/ft)</label>
+                         <input disabled={isReadOnly} type="number" min="0" className="w-full bg-white dark:bg-black border border-emerald-200 dark:border-emerald-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
+                           value={formData.casingRate || ''} onChange={e => handleCasingChange(formData.casingDepth || 0, Number(e.target.value), formData.casingType || '7"')} />
+                      </div>
+                   </div>
+                   <div className="mt-2 text-right text-sm text-emerald-700 dark:text-emerald-400 font-medium">
+                      Casing Total: ₹{((formData.casingDepth || 0) * (formData.casingRate || 0)).toLocaleString()}
+                   </div>
+                </div>
+
+                {/* 10" Casing Details */}
+                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-100 dark:border-purple-900/30">
+                   <h4 className="font-semibold text-purple-900 dark:text-purple-300 mb-3 text-sm">10" Casing Pipe Details</h4>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div>
+                         <label className="block text-xs font-medium text-purple-800 dark:text-purple-200 mb-1">Depth (ft)</label>
+                         <input disabled={isReadOnly} type="number" min="0" className="w-full bg-white dark:bg-black border border-purple-200 dark:border-purple-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
+                           value={formData.casing10Depth || ''} onChange={e => handleCasing10Change(Number(e.target.value), formData.casing10Rate || 0)} />
+                      </div>
+                      <div>
+                         <label className="block text-xs font-medium text-purple-800 dark:text-purple-200 mb-1">Rate (₹/ft)</label>
+                         <input disabled={isReadOnly} type="number" min="0" className="w-full bg-white dark:bg-black border border-purple-200 dark:border-purple-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
+                           value={formData.casing10Rate || ''} onChange={e => handleCasing10Change(formData.casing10Depth || 0, Number(e.target.value))} />
+                      </div>
+                   </div>
+                   <div className="mt-2 text-right text-sm text-purple-700 dark:text-purple-400 font-medium">
+                      10" Casing Total: ₹{((formData.casing10Depth || 0) * (formData.casing10Rate || 0)).toLocaleString()}
+                   </div>
                 </div>
 
                 {/* Items & Cost Calculator */}
@@ -603,7 +716,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             </div>
             
             <div className="flex-1 relative bg-slate-100 dark:bg-neutral-800">
-               <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+               <div id="mappls-map-picker" ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
                {!mapInstance.current && (
                  <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-neutral-400">
                     Loading Map...
