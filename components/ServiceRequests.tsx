@@ -66,37 +66,61 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   };
 
   useEffect(() => {
-    if (isMapOpen && mapContainerRef.current && !mapInstance.current) {
-        loadMapplsScript().then((mappls: any) => {
-             // Default to India center
-             const defaultCenter = { lat: 28.62, lng: 77.09 };
-             
-             mapInstance.current = new mappls.Map(mapContainerRef.current, {
-                center: defaultCenter,
-                zoom: 5
-             });
-             
-             mapInstance.current.addListener('load', () => {
-                 const options = {
-                    map: mapInstance.current,
-                    header: true,
-                    closeBtn: false,
-                 };
-                 
-                 mappls.placePicker(options, (data: any) => {
-                     if (data && data.data) {
-                         const loc = data.data;
-                         // Extract lat/lng safely from plugin response
-                         const lat = loc.lat ? parseFloat(loc.lat) : (loc.point ? parseFloat(loc.point.lat) : null);
-                         const lng = loc.lng ? parseFloat(loc.lng) : (loc.point ? parseFloat(loc.point.lng) : null);
-                         
-                         if (lat && lng) {
-                             setPickedLocation({ lat, lng });
-                         }
-                     }
-                 });
-             });
-        }).catch(err => console.error("Failed to load Mappls:", err));
+    if (isMapOpen) {
+        // Short timeout to ensure DOM is ready
+        setTimeout(() => {
+            loadMapplsScript().then((mappls: any) => {
+                if (mapInstance.current) return; // Already initialized
+
+                // Default to India center
+                const defaultCenter = { lat: 28.62, lng: 77.09 };
+                
+                // Use ID string for container
+                const mapObj = new mappls.Map('mappls-map-picker', {
+                    center: defaultCenter,
+                    zoom: 5
+                });
+
+                mapInstance.current = mapObj;
+                
+                if (mapObj && typeof mapObj.addListener === 'function') {
+                    mapObj.addListener('load', () => {
+                        const options = {
+                            map: mapObj,
+                            header: true,
+                            closeBtn: false,
+                        };
+                        
+                        if (mappls.placePicker) {
+                            mappls.placePicker(options, (data: any) => {
+                                if (data && data.data) {
+                                    const loc = data.data;
+                                    // Extract lat/lng safely from plugin response
+                                    const lat = loc.lat ? parseFloat(loc.lat) : (loc.point ? parseFloat(loc.point.lat) : null);
+                                    const lng = loc.lng ? parseFloat(loc.lng) : (loc.point ? parseFloat(loc.point.lng) : null);
+                                    
+                                    if (lat && lng) {
+                                        setPickedLocation({ lat, lng });
+                                    }
+                                }
+                            });
+                        } else {
+                            console.error("Mappls placePicker plugin not found");
+                        }
+                    });
+                } else {
+                    console.error("Failed to initialize Mappls map object");
+                }
+            }).catch(err => console.error("Failed to load Mappls:", err));
+        }, 100);
+    } else {
+        // Cleanup if modal closes
+        if (mapInstance.current) {
+            try {
+                mapInstance.current.remove();
+            } catch(e) { /* ignore */ }
+            mapInstance.current = null;
+        }
     }
   }, [isMapOpen]);
 
