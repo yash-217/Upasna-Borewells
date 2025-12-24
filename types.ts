@@ -1,3 +1,4 @@
+// ... (Keep existing Enums) ...
 export enum ServiceStatus {
   PENDING = 'Pending',
   IN_PROGRESS = 'In Progress',
@@ -13,6 +14,49 @@ export enum ServiceType {
   PLUMBING = 'Pipeline Extension'
 }
 
+// --- Database Row Types (Snake Case) ---
+// These match exactly what comes back from Supabase
+export interface DBProduct {
+  id: string;
+  name: string;
+  category: string;
+  unit_price: number;
+  unit: string;
+  last_edited_by: string | null;
+  last_edited_at: string | null;
+}
+
+export interface DBEmployee {
+  id: string;
+  name: string;
+  role: string;
+  phone: string;
+  salary: number;
+  join_date: string;
+  assigned_vehicle: string | null;
+  last_edited_by: string | null;
+  last_edited_at: string | null;
+}
+
+export interface DBServiceRequest {
+  id: string;
+  customer_name: string;
+  phone: string;
+  location: string;
+  date: string;
+  type: string;
+  status: string;
+  vehicle: string | null;
+  notes: string | null;
+  total_cost: number;
+  drilling_depth: number;
+  drilling_rate: number;
+  items: any; // JSONB is hard to type strictly, but we parse it to ServiceItem[]
+  last_edited_by: string | null;
+  last_edited_at: string | null;
+}
+
+// --- Application Types (Camel Case) ---
 export interface TrackedEntity {
   lastEditedBy?: string;
   lastEditedAt?: string;
@@ -23,13 +67,13 @@ export interface Product extends TrackedEntity {
   name: string;
   category: 'Motor' | 'Pipe' | 'Cable' | 'Service' | 'Accessory';
   unitPrice: number;
-  unit: string; // e.g., 'ft', 'pcs', 'meter'
+  unit: string;
 }
 
 export interface ServiceItem {
   productId: string;
   quantity: number;
-  priceAtTime: number; // Snapshot of price
+  priceAtTime: number;
 }
 
 export interface ServiceRequest extends TrackedEntity {
@@ -43,8 +87,7 @@ export interface ServiceRequest extends TrackedEntity {
   items: ServiceItem[];
   notes: string;
   totalCost: number;
-  vehicle?: string; // Assigned vehicle
-  // Specific drilling fields
+  vehicle?: string;
   drillingDepth?: number;
   drillingRate?: number;
 }
@@ -56,7 +99,7 @@ export interface Employee extends TrackedEntity {
   phone: string;
   salary: number;
   joinDate: string;
-  assignedVehicle?: string; // Main vehicle assignment
+  assignedVehicle?: string;
 }
 
 export interface User {

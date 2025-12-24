@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Upasna Borewells</string>
+    <string name="title_activity_main">Upasna Borewells</string>
+    <string name="package_name">com.upasnaborewells.app</string>
+    <string name="custom_url_scheme">com.upasnaborewells.app</string>
+</resources>

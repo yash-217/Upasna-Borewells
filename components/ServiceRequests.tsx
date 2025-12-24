@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Product, ServiceRequest, ServiceStatus, ServiceType, ServiceItem, User } from '../types';
-import { Plus, Search, Filter, Edit2, Trash2, X, Truck, Eye } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, X, Truck, Eye, MapPin } from 'lucide-react';
 import { VEHICLES } from '../constants';
 
 interface ServiceRequestsProps {
@@ -21,6 +21,116 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   const [editingRequest, setEditingRequest] = useState<ServiceRequest | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+
+  // Map State & Refs
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [pickedLocation, setPickedLocation] = useState<{lat: number, lng: number} | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<any>(null);
+  const markerInstance = useRef<any>(null);
+
+  const loadMapplsScript = () => {
+    return new Promise((resolve, reject) => {
+      if (window.mappls && window.mappls.placePicker) {
+        resolve(window.mappls);
+        return;
+      }
+      
+      let apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
+      if (apiKey && apiKey.startsWith('VITE_MAPPLS_API_KEY=')) {
+          apiKey = apiKey.replace('VITE_MAPPLS_API_KEY=', '');
+      }
+
+      if (!apiKey) {
+        alert("Mappls API Key is missing! Please check your .env file.");
+        reject(new Error("VITE_MAPPLS_API_KEY is missing"));
+        return;
+      }
+
+      const loadScript = (src: string) => {
+          return new Promise((res, rej) => {
+              const script = document.createElement('script');
+              script.src = src;
+              script.async = true;
+              script.onload = res;
+              script.onerror = rej;
+              document.body.appendChild(script);
+          });
+      };
+
+      loadScript(`https://sdk.mappls.com/map/sdk/web?v=3.0&access_token=${apiKey}`)
+        .then(() => loadScript(`https://sdk.mappls.com/map/sdk/plugins?v=3.0&access_token=${apiKey}`))
+        .then(() => resolve(window.mappls))
+        .catch(err => reject(err));
+    });
+  };
+
+  useEffect(() => {
+    if (isMapOpen) {
+        // Short timeout to ensure DOM is ready
+        setTimeout(() => {
+            loadMapplsScript().then((mappls: any) => {
+                if (mapInstance.current) return; // Already initialized
+
+                // Default to India center
+                const defaultCenter = { lat: 28.62, lng: 77.09 };
+                
+                // Use ID string for container
+                const mapObj = new mappls.Map('mappls-map-picker', {
+                    center: defaultCenter,
+                    zoom: 5
+                });
+
+                mapInstance.current = mapObj;
+                
+                if (mapObj && typeof mapObj.addListener === 'function') {
+                    mapObj.addListener('load', () => {
+                        const options = {
+                            map: mapObj,
+                            header: true,
+                            closeBtn: false,
+                        };
+                        
+                        if (mappls.placePicker) {
+                            mappls.placePicker(options, (data: any) => {
+                                if (data && data.data) {
+                                    const loc = data.data;
+                                    // Extract lat/lng safely from plugin response
+                                    const lat = loc.lat ? parseFloat(loc.lat) : (loc.point ? parseFloat(loc.point.lat) : null);
+                                    const lng = loc.lng ? parseFloat(loc.lng) : (loc.point ? parseFloat(loc.point.lng) : null);
+                                    
+                                    if (lat && lng) {
+                                        setPickedLocation({ lat, lng });
+                                    }
+                                }
+                            });
+                        } else {
+                            console.error("Mappls placePicker plugin not found");
+                        }
+                    });
+                } else {
+                    console.error("Failed to initialize Mappls map object");
+                }
+            }).catch(err => console.error("Failed to load Mappls:", err));
+        }, 100);
+    } else {
+        // Cleanup if modal closes
+        if (mapInstance.current) {
+            try {
+                mapInstance.current.remove();
+            } catch(e) { /* ignore */ }
+            mapInstance.current = null;
+        }
+    }
+  }, [isMapOpen]);
+
+  const handleConfirmLocation = () => {
+      if (pickedLocation) {
+          // Format as "Lat, Lng" string since we don't have reverse geocoding API key guaranteed
+          setFormData({ ...formData, location: `${pickedLocation.lat.toFixed(6)}, ${pickedLocation.lng.toFixed(6)}` });
+      }
+      setIsMapOpen(false);
+  };
   
   // Form State
   const [formData, setFormData] = useState<Partial<ServiceRequest>>({
@@ -94,9 +204,27 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       totalCost: calculateTotal(formData.items || [], depth, rate)
     });
   };
+  
+  const validateForm = (): boolean => {
+    if (!formData.customerName?.trim()) {
+      alert("Customer Name is required");
+      return false;
+    }
+    if (!formData.phone?.match(/^\d{10}$/)) {
+      alert("Please enter a valid 10-digit phone number");
+      return false;
+    }
+    if ((formData.totalCost || 0) < 0) {
+      alert("Total cost cannot be negative");
+      return false;
+    }
+    return true;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Add Validation Check
+    if (!validateForm()) return;
     const timestamp = new Date().toLocaleString();
     if (editingRequest) {
       onUpdateRequest({ 
@@ -157,23 +285,27 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
   // Sorting Logic
   const sortedRequests = [...filteredRequests].sort((a, b) => {
-    const activeStatuses = [ServiceStatus.PENDING, ServiceStatus.IN_PROGRESS];
-    const isActiveA = activeStatuses.includes(a.status);
-    const isActiveB = activeStatuses.includes(b.status);
-    
-    // Always show active requests before inactive ones if mixed
-    if (isActiveA && !isActiveB) return -1;
-    if (!isActiveA && isActiveB) return 1;
+    const statusPriority: Record<ServiceStatus, number> = {
+      [ServiceStatus.PENDING]: 1,
+      [ServiceStatus.IN_PROGRESS]: 2,
+      [ServiceStatus.COMPLETED]: 3,
+      [ServiceStatus.CANCELLED]: 4
+    };
+
+    const priorityA = statusPriority[a.status] || 99;
+    const priorityB = statusPriority[b.status] || 99;
+
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
 
     const dateA = new Date(a.date).getTime();
     const dateB = new Date(b.date).getTime();
 
-    if (isActiveA) {
-      // Active: Oldest first
-      return dateA - dateB;
+    if (a.status === ServiceStatus.PENDING) {
+      return dateA - dateB; // Oldest to newest
     } else {
-      // Inactive: Newest first
-      return dateB - dateA;
+      return dateB - dateA; // Newest first
     }
   });
 
@@ -217,7 +349,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
+      <div className="flex flex-col gap-4">
         {sortedRequests.length > 0 ? sortedRequests.map(req => (
           <div key={req.id} className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col hover:shadow-md transition-shadow group">
             <div className="p-5 flex-1">
@@ -286,7 +418,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             </div>
           </div>
         )) : (
-          <div className="col-span-full py-10 text-center text-slate-400 dark:text-neutral-500">
+          <div className="py-10 text-center text-slate-400 dark:text-neutral-500">
              No service requests found.
           </div>
         )}
@@ -319,8 +451,15 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Location</label>
-                    <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                      value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
+                    <div className="flex gap-2">
+                      <input disabled={isReadOnly} required type="text" className="flex-1 bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                        value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} placeholder="Address or Coordinates" />
+                      {!isReadOnly && (
+                        <button type="button" onClick={() => setIsMapOpen(true)} className="px-3 py-2 bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-neutral-700 rounded-lg hover:bg-slate-200 dark:hover:bg-neutral-700 transition-colors" title="Pick on Map">
+                           <MapPin size={18} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Service Type</label>
@@ -451,6 +590,40 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                 )}
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Map Picker Modal */}
+      {isMapOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-3xl h-[500px] flex flex-col animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-neutral-800">
+            <div className="p-4 border-b border-slate-100 dark:border-neutral-800 flex justify-between items-center bg-white dark:bg-neutral-900 rounded-t-xl">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white">Pick Location</h3>
+              <button onClick={() => setIsMapOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"><X size={24} /></button>
+            </div>
+            
+            <div className="flex-1 relative bg-slate-100 dark:bg-neutral-800">
+               <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+               {!mapInstance.current && (
+                 <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-neutral-400">
+                    Loading Map...
+                 </div>
+               )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 dark:border-neutral-800 flex justify-between items-center bg-slate-50 dark:bg-neutral-900/50 rounded-b-xl">
+              <div className="text-sm text-slate-600 dark:text-neutral-400">
+                 {pickedLocation ? `Selected: ${pickedLocation.lat.toFixed(5)}, ${pickedLocation.lng.toFixed(5)}` : 'Click on map to select location'}
+              </div>
+              <div className="flex gap-3">
+                 <button onClick={() => setIsMapOpen(false)} className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors">
+                   Cancel
+                 </button>
+                 <button onClick={handleConfirmLocation} disabled={!pickedLocation} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                   Confirm Location
+                 </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

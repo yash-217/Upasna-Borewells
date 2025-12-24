@@ -477,7 +477,7 @@ export default function App() {
 
       {/* Sidebar (Desktop Nav + Mobile Settings Drawer) */}
       <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-72 bg-white dark:bg-neutral-900 border-r border-slate-200 dark:border-neutral-800 transform transition-transform duration-300 ease-out flex flex-col shadow-2xl lg:shadow-none
+        fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-neutral-900 border-r border-slate-200 dark:border-neutral-800 transform transition-transform duration-300 ease-out flex flex-col shadow-2xl lg:shadow-none
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="flex items-center space-x-3 px-6 py-6 border-b border-slate-100 dark:border-neutral-800">
@@ -518,7 +518,7 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden bg-slate-50 dark:bg-black w-full pb-24 lg:pb-0">
+      <main className="flex-1 flex flex-col min-h-screen overflow-hidden bg-slate-50 dark:bg-black w-full pb-24 lg:pb-0 lg:ml-72">
         {/* Header */}
         <header className="bg-white dark:bg-neutral-900 border-b border-slate-200 dark:border-neutral-800 sticky top-0 z-30 transition-all duration-200">
           <div className="flex flex-col md:flex-row md:items-center justify-between px-4 lg:px-8 py-3 gap-3">
