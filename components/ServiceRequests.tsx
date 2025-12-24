@@ -36,8 +36,15 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         return;
       }
       const script = document.createElement('script');
-      const apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
+      let apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
+      
+      // Sanitize Key: Remove prefix if user accidentally pasted full line
+      if (apiKey && apiKey.startsWith('VITE_MAPPLS_API_KEY=')) {
+          apiKey = apiKey.replace('VITE_MAPPLS_API_KEY=', '');
+      }
+
       if (!apiKey) {
+        alert("Mappls API Key is missing! Please check your .env file.");
         reject(new Error("VITE_MAPPLS_API_KEY is missing"));
         return;
       }
