@@ -31,14 +31,12 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
   const loadMapplsScript = () => {
     return new Promise((resolve, reject) => {
-      if (window.mappls) {
+      if (window.mappls && window.mappls.placePicker) {
         resolve(window.mappls);
         return;
       }
-      const script = document.createElement('script');
-      let apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
       
-      // Sanitize Key: Remove prefix if user accidentally pasted full line
+      let apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
       if (apiKey && apiKey.startsWith('VITE_MAPPLS_API_KEY=')) {
           apiKey = apiKey.replace('VITE_MAPPLS_API_KEY=', '');
       }
@@ -48,43 +46,58 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         reject(new Error("VITE_MAPPLS_API_KEY is missing"));
         return;
       }
-      script.src = `https://apis.mappls.com/advancedmaps/api/v3/map_sdk?layer=vector&v=3.0&access_token=${apiKey}`;
-      script.async = true;
-      script.onload = () => resolve(window.mappls);
-      script.onerror = () => reject(new Error("Failed to load Mappls SDK"));
-      document.body.appendChild(script);
+
+      const loadScript = (src: string) => {
+          return new Promise((res, rej) => {
+              const script = document.createElement('script');
+              script.src = src;
+              script.async = true;
+              script.onload = res;
+              script.onerror = rej;
+              document.body.appendChild(script);
+          });
+      };
+
+      loadScript(`https://sdk.mappls.com/map/sdk/web?v=3.0&access_token=${apiKey}`)
+        .then(() => loadScript(`https://sdk.mappls.com/map/sdk/plugins?v=3.0&access_token=${apiKey}`))
+        .then(() => resolve(window.mappls))
+        .catch(err => reject(err));
     });
   };
 
   useEffect(() => {
     if (isMapOpen && mapContainerRef.current && !mapInstance.current) {
         loadMapplsScript().then((mappls: any) => {
-             // Default to India center or current location if available
-             const defaultCenter = { lat: 20.5937, lng: 78.9629 };
+             // Default to India center
+             const defaultCenter = { lat: 28.62, lng: 77.09 };
              
              mapInstance.current = new mappls.Map(mapContainerRef.current, {
                 center: defaultCenter,
                 zoom: 5
              });
              
-             mapInstance.current.addListener('click', (e: any) => {
-                 // Mappls event structure might vary, but usually e.lngLat contains {lat, lng}
-                 const lat = e.lngLat ? e.lngLat.lat : e.latLng.lat(); 
-                 const lng = e.lngLat ? e.lngLat.lng : e.latLng.lng();
-                 setPickedLocation({ lat, lng });
+             mapInstance.current.addListener('load', () => {
+                 const options = {
+                    map: mapInstance.current,
+                    header: true,
+                    closeBtn: false,
+                 };
                  
-                 if (markerInstance.current) {
-                     markerInstance.current.setPosition({ lat, lng });
-                 } else {
-                     markerInstance.current = new mappls.Marker({
-                         map: mapInstance.current,
-                         position: { lat, lng }
-                     });
-                 }
+                 mappls.placePicker(options, (data: any) => {
+                     if (data && data.data) {
+                         const loc = data.data;
+                         // Extract lat/lng safely from plugin response
+                         const lat = loc.lat ? parseFloat(loc.lat) : (loc.point ? parseFloat(loc.point.lat) : null);
+                         const lng = loc.lng ? parseFloat(loc.lng) : (loc.point ? parseFloat(loc.point.lng) : null);
+                         
+                         if (lat && lng) {
+                             setPickedLocation({ lat, lng });
+                         }
+                     }
+                 });
              });
         }).catch(err => console.error("Failed to load Mappls:", err));
     }
-    // Cleanup if needed, though Mappls cleanup is tricky without destroying DOM
   }, [isMapOpen]);
 
   const handleConfirmLocation = () => {
