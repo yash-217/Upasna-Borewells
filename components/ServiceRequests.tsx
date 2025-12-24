@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Product, ServiceRequest, ServiceStatus, ServiceType, ServiceItem, User } from '../types';
-import { Plus, Search, Filter, Edit2, Trash2, X, Truck, Eye, MapPin } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, X, Truck, Eye, MapPin, Calendar } from 'lucide-react';
 import { VEHICLES } from '../constants';
 
 interface ServiceRequestsProps {
@@ -12,15 +12,22 @@ interface ServiceRequestsProps {
   onDeleteRequest: (id: string) => void;
   vehicleFilter: string;
   isReadOnly?: boolean;
+  onResetFilters?: () => void;
 }
 
 export const ServiceRequests: React.FC<ServiceRequestsProps> = ({ 
-  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly
+  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<ServiceRequest | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [isDateFilterOpen, setIsDateFilterOpen] = useState(false);
+  const [tempStartDate, setTempStartDate] = useState('');
+  const [tempEndDate, setTempEndDate] = useState('');
+  const today = new Date().toISOString().split('T')[0];
 
   // Map State & Refs
   const [isMapOpen, setIsMapOpen] = useState(false);
@@ -132,7 +139,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       setIsMapOpen(false);
   };
   
-  // Form State
+  // Form State - Simplified now that ServiceRequest has all fields
   const [formData, setFormData] = useState<Partial<ServiceRequest>>({
     customerName: '',
     phone: '',
@@ -145,14 +152,21 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     notes: '',
     totalCost: 0,
     drillingDepth: 0,
-    drillingRate: 0
+    drillingRate: 0,
+    casingDepth: 0,
+    casingRate: 0,
+    casingType: '7"',
+    casing10Depth: 0,
+    casing10Rate: 0
   });
 
   // Helper to calculate total cost
-  const calculateTotal = (items: ServiceItem[], depth: number = 0, rate: number = 0) => {
-    const itemsTotal = items.reduce((sum, item) => sum + (item.quantity * item.priceAtTime), 0);
-    const drillingTotal = depth * rate;
-    return itemsTotal + drillingTotal;
+  const calculateTotal = (data: typeof formData) => {
+    const itemsTotal = (data.items || []).reduce((sum, item) => sum + (item.quantity * item.priceAtTime), 0);
+    const drillingTotal = (data.drillingDepth || 0) * (data.drillingRate || 0);
+    const casingTotal = (data.casingDepth || 0) * (data.casingRate || 0);
+    const casing10Total = (data.casing10Depth || 0) * (data.casing10Rate || 0);
+    return itemsTotal + drillingTotal + casingTotal + casing10Total;
   };
 
   const handleAddItem = (productId: string) => {
@@ -168,20 +182,27 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       newItems.push({ productId, quantity: 1, priceAtTime: product.unitPrice });
     }
 
-    setFormData({
+    const updatedFormData = {
       ...formData,
-      items: newItems,
-      totalCost: calculateTotal(newItems, formData.drillingDepth, formData.drillingRate)
+      items: newItems
+    };
+
+    setFormData({
+      ...updatedFormData,
+      totalCost: calculateTotal(updatedFormData)
     });
   };
 
   const handleRemoveItem = (index: number) => {
     const newItems = [...(formData.items || [])];
     newItems.splice(index, 1);
-    setFormData({
+    const updatedFormData = {
       ...formData,
-      items: newItems,
-      totalCost: calculateTotal(newItems, formData.drillingDepth, formData.drillingRate)
+      items: newItems
+    };
+    setFormData({
+      ...updatedFormData,
+      totalCost: calculateTotal(updatedFormData)
     });
   };
 
@@ -189,19 +210,50 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     if (quantity < 1) return;
     const newItems = [...(formData.items || [])];
     newItems[index].quantity = quantity;
-    setFormData({
+    const updatedFormData = {
       ...formData,
-      items: newItems,
-      totalCost: calculateTotal(newItems, formData.drillingDepth, formData.drillingRate)
+      items: newItems
+    };
+    setFormData({
+      ...updatedFormData,
+      totalCost: calculateTotal(updatedFormData)
     });
   };
 
   const handleDrillingChange = (depth: number, rate: number) => {
-    setFormData({
+    const updatedFormData = {
       ...formData,
       drillingDepth: depth,
-      drillingRate: rate,
-      totalCost: calculateTotal(formData.items || [], depth, rate)
+      drillingRate: rate
+    };
+    setFormData({
+      ...updatedFormData,
+      totalCost: calculateTotal(updatedFormData)
+    });
+  };
+
+  const handleCasingChange = (depth: number, rate: number, type: string) => {
+    const updatedFormData = {
+      ...formData,
+      casingDepth: depth,
+      casingRate: rate,
+      casingType: type
+    };
+    setFormData({
+      ...updatedFormData,
+      totalCost: calculateTotal(updatedFormData)
+    });
+  };
+
+  const handleCasing10Change = (depth: number, rate: number) => {
+    const updatedFormData = {
+      ...formData,
+      casing10Depth: depth,
+      casing10Rate: rate
+    };
+    setFormData({
+      ...updatedFormData,
+      totalCost: calculateTotal(updatedFormData)
     });
   };
   
@@ -216,6 +268,14 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     }
     if ((formData.totalCost || 0) < 0) {
       alert("Total cost cannot be negative");
+      return false;
+    }
+    if ((formData.casingDepth || 0) > (formData.drillingDepth || 0)) {
+      alert("Casing depth cannot be greater than drilling depth");
+      return false;
+    }
+    if ((formData.casing10Depth || 0) > (formData.drillingDepth || 0)) {
+      alert("10\" Casing depth cannot be greater than drilling depth");
       return false;
     }
     return true;
@@ -263,7 +323,12 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         notes: '',
         totalCost: 0,
         drillingDepth: 0,
-        drillingRate: 0
+        drillingRate: 0,
+        casingDepth: 0,
+        casingRate: 0,
+        casingType: '7"',
+        casing10Depth: 0,
+        casing10Rate: 0
       });
     }
     setIsModalOpen(true);
@@ -280,7 +345,12 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                           req.location.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = statusFilter === 'All' || req.status === statusFilter;
     const matchesVehicle = vehicleFilter === 'All Vehicles' || req.vehicle === vehicleFilter;
-    return matchesSearch && matchesFilter && matchesVehicle;
+    
+    let matchesDate = true;
+    if (startDate && req.date < startDate) matchesDate = false;
+    if (endDate && req.date > endDate) matchesDate = false;
+
+    return matchesSearch && matchesFilter && matchesVehicle && matchesDate;
   });
 
   // Sorting Logic
@@ -309,6 +379,17 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     }
   });
 
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('All');
+    setStartDate('');
+    setEndDate('');
+    setIsDateFilterOpen(false);
+    if (onResetFilters) onResetFilters();
+  };
+
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'All' || vehicleFilter !== 'All Vehicles' || startDate !== '' || endDate !== '';
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 md:mb-8">
@@ -335,7 +416,25 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button 
+              onClick={() => {
+                setTempStartDate(startDate);
+                setTempEndDate(endDate);
+                setIsDateFilterOpen(true);
+              }}
+              className={`flex items-center gap-2 border rounded-lg px-3 py-2 text-sm transition-colors ${
+                startDate || endDate 
+                ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300' 
+                : 'bg-white dark:bg-black border-slate-200 dark:border-neutral-800 text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-neutral-800'
+              }`}
+            >
+              <Calendar size={16} />
+              <span>
+                {startDate || endDate ? `${startDate || 'Start'} - ${endDate || 'End'}` : 'Filter by Date'}
+              </span>
+            </button>
+
             <Filter size={18} className="text-slate-400 dark:text-neutral-500" />
             <select 
               className="flex-1 md:flex-none bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
@@ -345,6 +444,11 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               <option value="All">All Status</option>
               {Object.values(ServiceStatus).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+            {hasActiveFilters && (
+              <button onClick={handleClearFilters} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-neutral-300 transition-colors" title="Clear Filters">
+                <X size={18} />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -389,6 +493,18 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                   <div className="text-sm flex justify-between">
                     <span className="text-slate-500 dark:text-neutral-400">Drilling:</span>
                     <span className="text-slate-700 dark:text-neutral-200">{req.drillingDepth}ft @ ₹{req.drillingRate}/ft</span>
+                  </div>
+                )}
+                {(req.casingDepth || 0) > 0 && (
+                  <div className="text-sm flex justify-between">
+                    <span className="text-slate-500 dark:text-neutral-400">Casing ({req.casingType || '7"'}):</span>
+                    <span className="text-slate-700 dark:text-neutral-200">{req.casingDepth}ft @ ₹{req.casingRate}/ft</span>
+                  </div>
+                )}
+                {(req.casing10Depth || 0) > 0 && (
+                  <div className="text-sm flex justify-between">
+                    <span className="text-slate-500 dark:text-neutral-400">10" Casing:</span>
+                    <span className="text-slate-700 dark:text-neutral-200">{req.casing10Depth}ft @ ₹{req.casing10Rate}/ft</span>
                   </div>
                 )}
                  <div className="text-sm flex justify-between pt-2 border-t border-slate-100 dark:border-neutral-800">
@@ -495,18 +611,69 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                   <div className="grid grid-cols-2 gap-4">
                      <div>
                         <label className="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Depth (ft)</label>
-                        <input disabled={isReadOnly} type="number" min="0" className="w-full bg-white dark:bg-black border border-blue-200 dark:border-blue-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
-                          value={formData.drillingDepth} onChange={e => handleDrillingChange(Number(e.target.value), formData.drillingRate || 0)} />
+                        <input disabled={isReadOnly} type="number" min="0" placeholder="0" className="w-full bg-white dark:bg-black border border-blue-200 dark:border-blue-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
+                          value={formData.drillingDepth || ''} onChange={e => handleDrillingChange(Number(e.target.value), formData.drillingRate || 0)} />
                      </div>
                      <div>
                         <label className="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Rate (₹/ft)</label>
-                        <input disabled={isReadOnly} type="number" min="0" className="w-full bg-white dark:bg-black border border-blue-200 dark:border-blue-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
-                          value={formData.drillingRate} onChange={e => handleDrillingChange(formData.drillingDepth || 0, Number(e.target.value))} />
+                        <input disabled={isReadOnly} type="number" min="0" placeholder="0" className="w-full bg-white dark:bg-black border border-blue-200 dark:border-blue-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
+                          value={formData.drillingRate || ''} onChange={e => handleDrillingChange(formData.drillingDepth || 0, Number(e.target.value))} />
                      </div>
                   </div>
                   <div className="mt-2 text-right text-sm text-blue-700 dark:text-blue-400 font-medium">
                      Drilling Total: ₹{((formData.drillingDepth || 0) * (formData.drillingRate || 0)).toLocaleString()}
                   </div>
+                </div>
+
+                {/* Casing Pipe Details */}
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg border border-emerald-100 dark:border-emerald-900/30">
+                   <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-semibold text-emerald-900 dark:text-emerald-300 text-sm">Casing Pipe Details</h4>
+                      <select 
+                         disabled={isReadOnly}
+                         className="bg-white dark:bg-black border border-emerald-200 dark:border-emerald-800/50 rounded px-2 py-1 text-xs text-emerald-900 dark:text-emerald-100 focus:outline-none"
+                         value={formData.casingType || '7"'}
+                         onChange={(e) => handleCasingChange(formData.casingDepth || 0, formData.casingRate || 0, e.target.value)}
+                      >
+                         <option value='7"'>7" Pipe</option>
+                         <option value='8"'>8" Pipe</option>
+                      </select>
+                   </div>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div>
+                         <label className="block text-xs font-medium text-emerald-800 dark:text-emerald-200 mb-1">Depth (ft)</label>
+                        <input disabled={isReadOnly} type="number" min="0" placeholder="0" className="w-full bg-white dark:bg-black border border-emerald-200 dark:border-emerald-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
+                           value={formData.casingDepth || ''} onChange={e => handleCasingChange(Number(e.target.value), formData.casingRate || 0, formData.casingType || '7"')} />
+                      </div>
+                      <div>
+                         <label className="block text-xs font-medium text-emerald-800 dark:text-emerald-200 mb-1">Rate (₹/ft)</label>
+                        <input disabled={isReadOnly} type="number" min="0" placeholder="0" className="w-full bg-white dark:bg-black border border-emerald-200 dark:border-emerald-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
+                           value={formData.casingRate || ''} onChange={e => handleCasingChange(formData.casingDepth || 0, Number(e.target.value), formData.casingType || '7"')} />
+                      </div>
+                   </div>
+                   <div className="mt-2 text-right text-sm text-emerald-700 dark:text-emerald-400 font-medium">
+                      Casing Total: ₹{((formData.casingDepth || 0) * (formData.casingRate || 0)).toLocaleString()}
+                   </div>
+                </div>
+
+                {/* 10" Casing Details */}
+                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-100 dark:border-purple-900/30">
+                   <h4 className="font-semibold text-purple-900 dark:text-purple-300 mb-3 text-sm">10" Casing Pipe Details</h4>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div>
+                         <label className="block text-xs font-medium text-purple-800 dark:text-purple-200 mb-1">Depth (ft)</label>
+                        <input disabled={isReadOnly} type="number" min="0" placeholder="0" className="w-full bg-white dark:bg-black border border-purple-200 dark:border-purple-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
+                           value={formData.casing10Depth || ''} onChange={e => handleCasing10Change(Number(e.target.value), formData.casing10Rate || 0)} />
+                      </div>
+                      <div>
+                         <label className="block text-xs font-medium text-purple-800 dark:text-purple-200 mb-1">Rate (₹/ft)</label>
+                        <input disabled={isReadOnly} type="number" min="0" placeholder="0" className="w-full bg-white dark:bg-black border border-purple-200 dark:border-purple-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
+                           value={formData.casing10Rate || ''} onChange={e => handleCasing10Change(formData.casing10Depth || 0, Number(e.target.value))} />
+                      </div>
+                   </div>
+                   <div className="mt-2 text-right text-sm text-purple-700 dark:text-purple-400 font-medium">
+                      10" Casing Total: ₹{((formData.casing10Depth || 0) * (formData.casing10Rate || 0)).toLocaleString()}
+                   </div>
                 </div>
 
                 {/* Items & Cost Calculator */}
@@ -603,7 +770,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             </div>
             
             <div className="flex-1 relative bg-slate-100 dark:bg-neutral-800">
-               <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+               <div id="mappls-map-picker" ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
                {!mapInstance.current && (
                  <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-neutral-400">
                     Loading Map...
@@ -623,6 +790,45 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                    Confirm Location
                  </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Date Filter Modal */}
+      {isDateFilterOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-sm animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-neutral-800">
+            <div className="p-4 border-b border-slate-100 dark:border-neutral-800 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white">Select Date Range</h3>
+              <button onClick={() => setIsDateFilterOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"><X size={24} /></button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Start Date</label>
+                <input 
+                  type="date" 
+                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
+                  value={tempStartDate}
+                  max={tempEndDate || today}
+                  onChange={(e) => setTempStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">End Date</label>
+                <input 
+                  type="date" 
+                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
+                  value={tempEndDate}
+                  min={tempStartDate}
+                  max={today}
+                  onChange={(e) => setTempEndDate(e.target.value)}
+                />
+              </div>
+              <button onClick={() => { setStartDate(tempStartDate); setEndDate(tempEndDate); setIsDateFilterOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition-colors">
+                Apply Filter
+              </button>
             </div>
           </div>
         </div>

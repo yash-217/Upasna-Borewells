@@ -51,6 +51,11 @@ export interface DBServiceRequest {
   total_cost: number;
   drilling_depth: number;
   drilling_rate: number;
+  casing_depth: number;
+  casing_rate: number;
+  casing_type: string | null;
+  casing10_depth: number;
+  casing10_rate: number;
   items: any; // JSONB is hard to type strictly, but we parse it to ServiceItem[]
   last_edited_by: string | null;
   last_edited_at: string | null;
@@ -90,6 +95,11 @@ export interface ServiceRequest extends TrackedEntity {
   vehicle?: string;
   drillingDepth?: number;
   drillingRate?: number;
+  casingDepth?: number;
+  casingRate?: number;
+  casingType?: string;
+  casing10Depth?: number;
+  casing10Rate?: number;
 }
 
 export interface Employee extends TrackedEntity {

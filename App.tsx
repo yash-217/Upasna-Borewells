@@ -221,6 +221,10 @@ export default function App() {
     setDarkMode(!darkMode);
   };
 
+  const handleResetFilters = () => {
+    setVehicleFilter('All Vehicles');
+  };
+
   // Confirmation Helpers
   const closeConfirm = () => setConfirmState(prev => ({ ...prev, isOpen: false }));
   
@@ -618,6 +622,7 @@ export default function App() {
                 onDeleteRequest={handleDeleteRequest}
                 vehicleFilter={vehicleFilter}
                 isReadOnly={currentUser.isGuest}
+                onResetFilters={handleResetFilters}
               />
             </div>
           )}
