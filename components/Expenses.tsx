@@ -1,6 +1,6 @@
 import React, { useState, ChangeEvent } from 'react';
 import Tesseract from 'tesseract.js';
-import { Trash2, Search, Filter, X, Plus, Truck, Upload, Calendar, DollarSign, FileText, Wrench, FileSpreadsheet } from 'lucide-react';
+import { Trash2, Search, X, Plus, Truck, Upload, Calendar, DollarSign, FileText, Wrench, FileSpreadsheet } from 'lucide-react';
 import { VEHICLES } from '../constants';
 
 export interface Expense {
@@ -35,9 +35,12 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
   const [isProcessing, setIsProcessing] = useState(false);
   const [ocrStatus, setOcrStatus] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showDateFilter, setShowDateFilter] = useState(false);
 
   // Filter & Sort State
   const [filterType, setFilterType] = useState<string>('All');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
@@ -171,7 +174,9 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
       const matchesVehicle = vehicleFilter === 'All Vehicles' || exp.vehicle === vehicleFilter;
       const matchesType = filterType === 'All' || exp.type === filterType;
       const matchesSearch = exp.description.toLowerCase().includes(searchTerm.toLowerCase()) || exp.amount.toString().includes(searchTerm);
-      return matchesVehicle && matchesType && matchesSearch;
+      const matchesDate = (!startDate || exp.date >= startDate) && (!endDate || exp.date <= endDate);
+      
+      return matchesVehicle && matchesType && matchesSearch && matchesDate;
     })
     .sort((a, b) => {
       const dateA = new Date(a.date).getTime();
@@ -179,12 +184,21 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
       return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
 
+  const activeFiltersCount = (filterType !== 'All' ? 1 : 0) + (startDate ? 1 : 0) + (endDate ? 1 : 0);
+
+  const clearFilters = () => {
+    setFilterType('All');
+    setStartDate('');
+    setEndDate('');
+  };
+
   return (
     <div className="space-y-6">
       {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-white dark:bg-neutral-900 p-4 rounded-xl border border-slate-200 dark:border-neutral-800 shadow-sm">
-        <div className="flex-1 w-full md:w-auto">
-          <div className="relative">
+      <div className="flex flex-col gap-4 bg-white dark:bg-neutral-900 p-4 rounded-xl border border-slate-200 dark:border-neutral-800 shadow-sm">
+        <div className="flex flex-col md:flex-row gap-4">
+          {/* Search Box - Maximized */}
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
             <input
               type="text"
@@ -194,20 +208,88 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
               className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white"
             />
           </div>
-        </div>
-        
-        <div className="flex gap-2 w-full md:w-auto overflow-x-auto">
-          <div className="relative min-w-[140px]">
-            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white appearance-none cursor-pointer"
-            >
-              <option value="All">All Types</option>
-              {EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
+
+          <div className="flex flex-wrap gap-2 items-center">
+              <div className="relative">
+                <button
+                  onClick={() => setShowDateFilter(!showDateFilter)}
+                  className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm font-medium ${
+                    startDate || endDate
+                      ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400'
+                      : 'bg-slate-50 dark:bg-black border-slate-200 dark:border-neutral-800 text-slate-700 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-800'
+                  }`}
+                >
+                  <Calendar size={16} />
+                  <span className="hidden sm:inline">{startDate || endDate ? 'Date Active' : 'Filter by Date'}</span>
+                </button>
+
+                {showDateFilter && (
+                  <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-slate-200 dark:border-neutral-800 p-4 z-20 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-sm font-semibold text-slate-800 dark:text-white">Date Range</h4>
+                      <button onClick={() => setShowDateFilter(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-300">
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs font-medium text-slate-500 dark:text-neutral-400 mb-1 block">Start Date</label>
+                        <input
+                          type="date"
+                          value={startDate}
+                          max={endDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-500 dark:text-neutral-400 mb-1 block">End Date</label>
+                        <input
+                          type="date"
+                          value={endDate}
+                          min={startDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                        />
+                      </div>
+                      {(startDate || endDate) && (
+                        <button
+                          onClick={() => { setStartDate(''); setEndDate(''); }}
+                          className="w-full py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        >
+                          Clear Dates
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="px-3 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white text-sm cursor-pointer"
+              >
+                <option value="All">All Types</option>
+                {EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+
+              <button 
+                onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                className="px-4 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors whitespace-nowrap text-sm font-medium"
+              >
+                {sortOrder === 'asc' ? 'Oldest' : 'Newest'}
+              </button>
+
+              {activeFiltersCount > 0 && (
+                <button 
+                  onClick={clearFilters}
+                  className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                  title="Clear Filters"
+                >
+                  <X size={20} />
+                </button>
+              )}
 
           {!isReadOnly && (
             <div className="relative">
@@ -221,13 +303,6 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
               </label>
             </div>
           )}
-
-          <button 
-            onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-            className="px-4 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors whitespace-nowrap"
-          >
-            {sortOrder === 'asc' ? 'Oldest' : 'Newest'}
-          </button>
 
           {!isReadOnly && (
             <button
@@ -243,6 +318,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
             </button>
           )}
         </div>
+      </div>
       </div>
 
       {/* Active Vehicle Filter Banner */}

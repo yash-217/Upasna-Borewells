@@ -26,9 +26,6 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isDateFilterOpen, setIsDateFilterOpen] = useState(false);
-  const [tempStartDate, setTempStartDate] = useState('');
-  const [tempEndDate, setTempEndDate] = useState('');
-  const today = new Date().toISOString().split('T')[0];
   const [mapSearchQuery, setMapSearchQuery] = useState('');
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([]);
   const searchTimeoutRef = useRef<any>(null);
@@ -651,23 +648,60 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button 
-              onClick={() => {
-                setTempStartDate(startDate);
-                setTempEndDate(endDate);
-                setIsDateFilterOpen(true);
-              }}
-              className={`flex items-center gap-2 border rounded-lg px-3 py-2 text-sm transition-colors ${
-                startDate || endDate 
-                ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300' 
-                : 'bg-white dark:bg-black border-slate-200 dark:border-neutral-800 text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-neutral-800'
-              }`}
-            >
-              <Calendar size={16} />
-              <span>
-                {startDate || endDate ? `${startDate || 'Start'} - ${endDate || 'End'}` : 'Filter by Date'}
-              </span>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setIsDateFilterOpen(!isDateFilterOpen)}
+                className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm font-medium ${
+                  startDate || endDate
+                    ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
+                    : 'bg-white dark:bg-black border-slate-200 dark:border-neutral-800 text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-neutral-800'
+                }`}
+              >
+                <Calendar size={16} />
+                <span className="hidden sm:inline">{startDate || endDate ? 'Date Active' : 'Filter by Date'}</span>
+              </button>
+
+              {isDateFilterOpen && (
+                <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-slate-200 dark:border-neutral-800 p-4 z-20 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-sm font-semibold text-slate-800 dark:text-white">Date Range</h4>
+                    <button onClick={() => setIsDateFilterOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-300">
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 dark:text-neutral-400 mb-1 block">Start Date</label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        max={endDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 dark:text-neutral-400 mb-1 block">End Date</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        min={startDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                      />
+                    </div>
+                    {(startDate || endDate) && (
+                      <button
+                        onClick={() => { setStartDate(''); setEndDate(''); }}
+                        className="w-full py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      >
+                        Clear Dates
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <Filter size={18} className="text-slate-400 dark:text-neutral-500" />
             <select 
@@ -1108,44 +1142,6 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         </div>
       )}
 
-      {/* Date Filter Modal */}
-      {isDateFilterOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-sm animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-neutral-800">
-            <div className="p-4 border-b border-slate-100 dark:border-neutral-800 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white">Select Date Range</h3>
-              <button onClick={() => setIsDateFilterOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"><X size={24} /></button>
-            </div>
-            
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Start Date</label>
-                <input 
-                  type="date" 
-                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
-                  value={tempStartDate}
-                  max={tempEndDate || today}
-                  onChange={(e) => setTempStartDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">End Date</label>
-                <input 
-                  type="date" 
-                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
-                  value={tempEndDate}
-                  min={tempStartDate}
-                  max={today}
-                  onChange={(e) => setTempEndDate(e.target.value)}
-                />
-              </div>
-              <button onClick={() => { setStartDate(tempStartDate); setEndDate(tempEndDate); setIsDateFilterOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition-colors">
-                Apply Filter
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
