@@ -138,6 +138,8 @@ export const mapRequestFromDB = (data: DBServiceRequest): ServiceRequest => ({
   casingType: data.casing_type || undefined,
   casing10Depth: Number(data.casing10_depth) || 0,
   casing10Rate: Number(data.casing10_rate) || 0,
+  latitude: data.latitude !== null ? Number(data.latitude) : undefined,
+  longitude: data.longitude !== null ? Number(data.longitude) : undefined,
   items: Array.isArray(data.items) ? data.items : [], 
   lastEditedBy: data.last_edited_by || undefined,
   lastEditedAt: data.last_edited_at || undefined
@@ -160,6 +162,8 @@ export const mapRequestToDB = (r: Partial<ServiceRequest>) => ({
   casing_type: r.casingType || null,
   casing10_depth: safeNumber(r.casing10Depth),
   casing10_rate: safeNumber(r.casing10Rate),
+  latitude: r.latitude ?? null,
+  longitude: r.longitude ?? null,
   items: r.items,
   last_edited_by: r.lastEditedBy,
   last_edited_at: safeTimestampToDB(r.lastEditedAt)
