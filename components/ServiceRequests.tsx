@@ -13,10 +13,11 @@ interface ServiceRequestsProps {
   vehicleFilter: string;
   isReadOnly?: boolean;
   onResetFilters?: () => void;
+  showToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
 export const ServiceRequests: React.FC<ServiceRequestsProps> = ({ 
-  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters
+  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters, showToast
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<ServiceRequest | null>(null);
@@ -190,7 +191,11 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       if (window.mappls && window.mappls.search) {
           searchTimeoutRef.current = setTimeout(() => {
               try {
-                  const searchOptions: any = { q: query };
+                  const searchOptions: any = { 
+                      q: query,
+                      pod: 'City,Locality,POI', 
+                      tokenizeAddress: true
+                  };
                   
                   if (pickedLocation) {
                       searchOptions.location = `${pickedLocation.lat},${pickedLocation.lng}`;
@@ -263,13 +268,18 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               }
           }
 
-          if (results.length > 0) {
-              const first = results[0];
-              const lat = parseFloat(first.latitude || first.lat);
-              const lng = parseFloat(first.longitude || first.lng);
+          // Find first result with valid coordinates
+          const validResult = results.find(r => {
+              const lat = parseFloat(r.latitude || r.lat || r.entryLatitude);
+              const lng = parseFloat(r.longitude || r.lng || r.entryLongitude);
+              return !isNaN(lat) && !isNaN(lng);
+          });
+
+          if (validResult) {
+              const lat = parseFloat(validResult.latitude || validResult.lat || validResult.entryLatitude);
+              const lng = parseFloat(validResult.longitude || validResult.lng || validResult.entryLongitude);
               
-              if (!isNaN(lat) && !isNaN(lng)) {
-                  const pos = { lat, lng };
+              const pos = { lat, lng };
                   if (mapInstance.current) {
                       mapInstance.current.setCenter(pos);
                       mapInstance.current.setZoom(16);
@@ -278,8 +288,10 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                       markerInstance.current.setPosition(pos);
                   }
                   setPickedLocation(pos);
-                  setPickedAddress(first.placeName || first.placeAddress || '');
-              }
+                  setPickedAddress(validResult.placeName || validResult.placeAddress || '');
+                  setSearchSuggestions([]);
+          } else {
+              showToast("Location not found or invalid coordinates.", "error");
           }
       });
   };
@@ -304,11 +316,11 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         },
         (error) => {
           console.error("Error getting location:", error);
-          alert("Unable to retrieve your location.");
+          showToast("Unable to retrieve your location.", "error");
         }
       );
     } else {
-      alert("Geolocation is not supported by this browser.");
+      showToast("Geolocation is not supported by this browser.", "error");
     }
   };
 
@@ -464,23 +476,23 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   
   const validateForm = (): boolean => {
     if (!formData.customerName?.trim()) {
-      alert("Customer Name is required");
+      showToast("Customer Name is required", "error");
       return false;
     }
     if (!formData.phone?.match(/^(\+91\s?)?\d{10}$/)) {
-      alert("Please enter a valid phone number");
+      showToast("Please enter a valid phone number", "error");
       return false;
     }
     if ((formData.totalCost || 0) < 0) {
-      alert("Total cost cannot be negative");
+      showToast("Total cost cannot be negative", "error");
       return false;
     }
     if ((formData.casingDepth || 0) > (formData.drillingDepth || 0)) {
-      alert("Casing depth cannot be greater than drilling depth");
+      showToast("Casing depth cannot be greater than drilling depth", "error");
       return false;
     }
     if ((formData.casing10Depth || 0) > (formData.drillingDepth || 0)) {
-      alert("10\" Casing depth cannot be greater than drilling depth");
+      showToast("10\" Casing depth cannot be greater than drilling depth", "error");
       return false;
     }
     return true;
