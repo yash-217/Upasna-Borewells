@@ -102,25 +102,44 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                 });
 
                 mapInstance.current = mapObj;
+                markerInstance.current = new mappls.Marker({
+                    map: mapObj,
+                    position: defaultCenter,
+                    draggable: true
+                });
+
+                markerInstance.current.addListener('dragend', (e: any) => {
+                    if (e && e.target && typeof e.target.getPosition === 'function') {
+                        const pos = e.target.getPosition();
+                        setPickedLocation({ lat: Number(pos.lat), lng: Number(pos.lng) });
+                        fetchAddress(Number(pos.lat), Number(pos.lng));
+                    }
+                });
                 
                 if (mapObj && typeof mapObj.addListener === 'function') {
-                    mapObj.addListener('load', () => {
-                        if (mappls.placePicker) {
-                            mappls.placePicker({
-                                map: mapObj,
-                                search: true,
-                                closeBtn: false,
-                                header: true
-                            }, (data: any) => {
-                                if (data) {
-                                    const lat = parseFloat(data.lat || data.latitude || data.entryLatitude);
-                                    const lng = parseFloat(data.lng || data.longitude || data.entryLongitude);
-                                    if (!isNaN(lat) && !isNaN(lng)) {
-                                        setPickedLocation({ lat, lng });
-                                        setPickedAddress(data.placeName || data.placeAddress || '');
+                    mapObj.addListener('click', (e: any) => {
+                        if (e && e.lngLat) {
+                            const lat = e.lngLat.lat;
+                            const lng = e.lngLat.lng;
+                            
+                            if (markerInstance.current) {
+                                markerInstance.current.setPosition({ lat, lng });
+                            } else {
+                                markerInstance.current = new mappls.Marker({
+                                    map: mapObj,
+                                    position: { lat, lng },
+                                    draggable: true
+                                });
+                                markerInstance.current.addListener('dragend', (e: any) => {
+                                    if (e && e.target && typeof e.target.getPosition === 'function') {
+                                        const pos = e.target.getPosition();
+                                        setPickedLocation({ lat: Number(pos.lat), lng: Number(pos.lng) });
+                                        fetchAddress(Number(pos.lat), Number(pos.lng));
                                     }
-                                }
-                            });
+                                });
+                            }
+                            setPickedLocation({ lat, lng });
+                            fetchAddress(lat, lng);
                         }
                     });
                 } else {
@@ -998,6 +1017,51 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               </div>
             </div>
             
+            <div className="p-2 border-b border-slate-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex gap-2 relative z-10">
+                <div className="relative flex-1">
+                    <input 
+                      type="text" 
+                      placeholder="Search for a place..." 
+                      className="w-full bg-slate-100 dark:bg-neutral-800 border-none rounded-lg pl-4 pr-10 py-2 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white"
+                      value={mapSearchQuery}
+                      onChange={handleSearchInputChange}
+                      onKeyDown={(e) => e.key === 'Enter' && handleMapSearch()}
+                    />
+                    {mapSearchQuery && (
+                        <button 
+                            onClick={() => {
+                                setMapSearchQuery('');
+                                setSearchSuggestions([]);
+                                if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-neutral-300 p-1"
+                        >
+                            <X size={16} />
+                        </button>
+                    )}
+                    {searchSuggestions.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-lg shadow-lg max-h-60 overflow-y-auto z-50">
+                            {searchSuggestions.map((item, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => handleSelectSuggestion(item)}
+                                    className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-neutral-800 text-slate-700 dark:text-neutral-200 border-b border-slate-100 dark:border-neutral-800 last:border-0"
+                                >
+                                    <div className="font-medium">{highlightMatch(item.placeName, mapSearchQuery)}</div>
+                                    <div className="text-xs text-slate-500 dark:text-neutral-400 truncate">{highlightMatch(item.placeAddress, mapSearchQuery)}</div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                <button onClick={handleMapSearch} disabled={isSearching} className="bg-slate-200 dark:bg-neutral-700 text-slate-700 dark:text-neutral-200 px-4 py-2 rounded-lg text-sm font-medium min-w-[80px] flex justify-center items-center disabled:opacity-70">
+                   {isSearching ? <Loader2 size={18} className="animate-spin" /> : 'Search'}
+                </button>
+                <button onClick={handleCurrentLocation} className="bg-slate-200 dark:bg-neutral-700 text-slate-700 dark:text-neutral-200 px-3 py-2 rounded-lg text-sm font-medium" title="Use Current Location">
+                   <Crosshair size={20} />
+                </button>
+            </div>
+
             <div className="flex-1 relative bg-slate-100 dark:bg-neutral-800">
                <div id="mappls-map-picker" ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
                {!mapInstance.current && (
