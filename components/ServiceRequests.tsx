@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Product, ServiceRequest, ServiceStatus, ServiceType, ServiceItem, User } from '../types';
-import { Plus, Search, Filter, Edit2, Trash2, X, Truck, Eye, MapPin, Calendar } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, X, Truck, Eye, MapPin, Calendar, Phone, MessageCircle } from 'lucide-react';
 import { VEHICLES } from '../constants';
 
 interface ServiceRequestsProps {
@@ -455,7 +455,11 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
       <div className="flex flex-col gap-4">
         {sortedRequests.length > 0 ? sortedRequests.map(req => (
-          <div key={req.id} className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col hover:shadow-md transition-shadow group">
+          <div 
+            key={req.id} 
+            onClick={() => openModal(req)}
+            className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col hover:shadow-md transition-shadow group cursor-pointer"
+          >
             <div className="p-5 flex-1">
               <div className="flex justify-between items-start mb-3">
                 <div>
@@ -522,11 +526,29 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             
             <div className="bg-slate-50 dark:bg-black/40 px-5 py-3 border-t border-slate-100 dark:border-neutral-800 flex justify-end items-center">
                <div className="flex gap-2">
-                 <button onClick={() => openModal(req)} className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-blue-600 transition-colors">
+                 <a 
+                   href={`https://wa.me/91${req.phone}`}
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   onClick={(e) => e.stopPropagation()}
+                   className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-green-500 transition-colors"
+                   title="WhatsApp"
+                 >
+                   <MessageCircle size={16} />
+                 </a>
+                 <a 
+                   href={`tel:${req.phone}`}
+                   onClick={(e) => e.stopPropagation()}
+                   className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-green-600 transition-colors"
+                   title="Call Customer"
+                 >
+                   <Phone size={16} />
+                 </a>
+                 <button onClick={(e) => { e.stopPropagation(); openModal(req); }} className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-blue-600 transition-colors">
                    {isReadOnly ? <Eye size={16} /> : <Edit2 size={16} />}
                  </button>
                  {!isReadOnly && (
-                   <button onClick={() => onDeleteRequest(req.id)} className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-red-600 transition-colors">
+                   <button onClick={(e) => { e.stopPropagation(); onDeleteRequest(req.id); }} className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-red-600 transition-colors">
                      <Trash2 size={16} />
                    </button>
                  )}
