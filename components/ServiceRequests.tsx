@@ -28,6 +28,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   const [tempStartDate, setTempStartDate] = useState('');
   const [tempEndDate, setTempEndDate] = useState('');
   const today = new Date().toISOString().split('T')[0];
+  const [mapSearchQuery, setMapSearchQuery] = useState('');
 
   // Map State & Refs
   const [isMapOpen, setIsMapOpen] = useState(false);
@@ -56,6 +57,10 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
       const loadScript = (src: string) => {
           return new Promise((res, rej) => {
+              if (document.querySelector(`script[src="${src}"]`)) {
+                  res(true);
+                  return;
+              }
               const script = document.createElement('script');
               script.src = src;
               script.async = true;
@@ -79,40 +84,40 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             loadMapplsScript().then((mappls: any) => {
                 if (mapInstance.current) return; // Already initialized
 
-                // Default to India center
-                const defaultCenter = { lat: 28.62, lng: 77.09 };
+                // Default to Chhatrapati Sambhajinagar
+                const defaultCenter = { lat: 19.8762, lng: 75.3433 };
                 
                 // Use ID string for container
                 const mapObj = new mappls.Map('mappls-map-picker', {
                     center: defaultCenter,
-                    zoom: 5
+                    zoom: 12,
+                    zoomControl: true,
+                    scrollWheel: true,
+                    draggable: true,
+                    clickableIcons: false
                 });
 
                 mapInstance.current = mapObj;
+                markerInstance.current = new mappls.Marker({
+                    map: mapObj,
+                    position: defaultCenter
+                });
                 
                 if (mapObj && typeof mapObj.addListener === 'function') {
-                    mapObj.addListener('load', () => {
-                        const options = {
-                            map: mapObj,
-                            header: true,
-                            closeBtn: false,
-                        };
-                        
-                        if (mappls.placePicker) {
-                            mappls.placePicker(options, (data: any) => {
-                                if (data && data.data) {
-                                    const loc = data.data;
-                                    // Extract lat/lng safely from plugin response
-                                    const lat = loc.lat ? parseFloat(loc.lat) : (loc.point ? parseFloat(loc.point.lat) : null);
-                                    const lng = loc.lng ? parseFloat(loc.lng) : (loc.point ? parseFloat(loc.point.lng) : null);
-                                    
-                                    if (lat && lng) {
-                                        setPickedLocation({ lat, lng });
-                                    }
-                                }
-                            });
-                        } else {
-                            console.error("Mappls placePicker plugin not found");
+                    mapObj.addListener('click', (e: any) => {
+                        if (e && e.lngLat) {
+                            const lat = e.lngLat.lat;
+                            const lng = e.lngLat.lng;
+                            
+                            if (markerInstance.current) {
+                                markerInstance.current.setPosition({ lat, lng });
+                            } else {
+                                markerInstance.current = new mappls.Marker({
+                                    map: mapObj,
+                                    position: { lat, lng }
+                                });
+                            }
+                            setPickedLocation({ lat, lng });
                         }
                     });
                 } else {
@@ -139,10 +144,34 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       setIsMapOpen(false);
   };
   
+  const handleMapSearch = () => {
+      if (!mapSearchQuery.trim() || !window.mappls || !window.mappls.search) return;
+
+      new window.mappls.search({ q: mapSearchQuery }, (data: any) => {
+          if (data && data.length > 0) {
+              const first = data[0];
+              const lat = parseFloat(first.latitude || first.lat);
+              const lng = parseFloat(first.longitude || first.lng);
+              
+              if (!isNaN(lat) && !isNaN(lng)) {
+                  const pos = { lat, lng };
+                  if (mapInstance.current) {
+                      mapInstance.current.setCenter(pos);
+                      mapInstance.current.setZoom(16);
+                  }
+                  if (markerInstance.current) {
+                      markerInstance.current.setPosition(pos);
+                  }
+                  setPickedLocation(pos);
+              }
+          }
+      });
+  };
+
   // Form State - Simplified now that ServiceRequest has all fields
   const [formData, setFormData] = useState<Partial<ServiceRequest>>({
     customerName: '',
-    phone: '',
+    phone: '+91 ',
     location: '',
     date: new Date().toISOString().split('T')[0],
     type: ServiceType.DRILLING,
@@ -262,8 +291,8 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       alert("Customer Name is required");
       return false;
     }
-    if (!formData.phone?.match(/^\d{10}$/)) {
-      alert("Please enter a valid 10-digit phone number");
+    if (!formData.phone?.match(/^(\+91\s?)?\d{10}$/)) {
+      alert("Please enter a valid phone number");
       return false;
     }
     if ((formData.totalCost || 0) < 0) {
@@ -313,7 +342,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       setEditingRequest(null);
       setFormData({
         customerName: '',
-        phone: '',
+        phone: '+91 ',
         location: '',
         date: new Date().toISOString().split('T')[0],
         type: ServiceType.DRILLING,
@@ -527,7 +556,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             <div className="bg-slate-50 dark:bg-black/40 px-5 py-3 border-t border-slate-100 dark:border-neutral-800 flex justify-end items-center">
                <div className="flex gap-2">
                  <a 
-                   href={`https://wa.me/91${req.phone}`}
+                   href={`https://wa.me/${req.phone.replace(/\D/g, '').length > 10 ? req.phone.replace(/\D/g, '') : '91' + req.phone.replace(/\D/g, '')}`}
                    target="_blank"
                    rel="noopener noreferrer"
                    onClick={(e) => e.stopPropagation()}
@@ -788,30 +817,37 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-3xl h-[500px] flex flex-col animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-neutral-800">
             <div className="p-4 border-b border-slate-100 dark:border-neutral-800 flex justify-between items-center bg-white dark:bg-neutral-900 rounded-t-xl">
               <h3 className="text-lg font-bold text-slate-800 dark:text-white">Pick Location</h3>
-              <button onClick={() => setIsMapOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"><X size={24} /></button>
+              <div className="flex items-center gap-2">
+                 {pickedLocation && (
+                   <button onClick={handleConfirmLocation} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors">
+                     Confirm
+                   </button>
+                 )}
+                 <button onClick={() => setIsMapOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"><X size={24} /></button>
+              </div>
             </div>
             
+            <div className="p-2 border-b border-slate-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex gap-2">
+                <input 
+                  type="text" 
+                  placeholder="Search for a place..." 
+                  className="flex-1 bg-slate-100 dark:bg-neutral-800 border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white"
+                  value={mapSearchQuery}
+                  onChange={(e) => setMapSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleMapSearch()}
+                />
+                <button onClick={handleMapSearch} className="bg-slate-200 dark:bg-neutral-700 text-slate-700 dark:text-neutral-200 px-4 py-2 rounded-lg text-sm font-medium">
+                   Search
+                </button>
+            </div>
+
             <div className="flex-1 relative bg-slate-100 dark:bg-neutral-800">
-               <div id="mappls-map-picker" ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+               <div id="mappls-map-picker" ref={mapContainerRef} className="absolute inset-0 w-full h-full rounded-b-xl overflow-hidden" />
                {!mapInstance.current && (
                  <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-neutral-400">
                     Loading Map...
                  </div>
                )}
-            </div>
-            
-            <div className="p-4 border-t border-slate-100 dark:border-neutral-800 flex justify-between items-center bg-slate-50 dark:bg-neutral-900/50 rounded-b-xl">
-              <div className="text-sm text-slate-600 dark:text-neutral-400">
-                 {pickedLocation ? `Selected: ${pickedLocation.lat.toFixed(5)}, ${pickedLocation.lng.toFixed(5)}` : 'Click on map to select location'}
-              </div>
-              <div className="flex gap-3">
-                 <button onClick={() => setIsMapOpen(false)} className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors">
-                   Cancel
-                 </button>
-                 <button onClick={handleConfirmLocation} disabled={!pickedLocation} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                   Confirm Location
-                 </button>
-              </div>
             </div>
           </div>
         </div>
