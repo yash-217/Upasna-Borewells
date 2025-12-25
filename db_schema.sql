@@ -47,12 +47,23 @@ create table public.service_requests (
   last_edited_at text
 );
 
+-- 4. EXPENSES TABLE
+CREATE TABLE public.expenses (
+    id SERIAL PRIMARY KEY,
+    date DATE NOT NULL,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('Fuel', 'Maintenance', 'Salary', 'Miscellaneous')),
+    amount DECIMAL(10, 2) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- Goal: Authenticated users can do everything. Anon users can do nothing (except login).
 
 alter table public.products enable row level security;
 alter table public.employees enable row level security;
 alter table public.service_requests enable row level security;
+alter table public.expenses enable row level security;
 
 -- Policy: Allow full access to authenticated users
 create policy "Allow full access to authenticated users" on public.products
@@ -62,6 +73,9 @@ create policy "Allow full access to authenticated users" on public.employees
   for all to authenticated using (true) with check (true);
 
 create policy "Allow full access to authenticated users" on public.service_requests
+  for all to authenticated using (true) with check (true);
+
+create policy "Allow full access to authenticated users" on public.expenses
   for all to authenticated using (true) with check (true);
 
 -- Optional: Allow Guest (Read-Only) if you implement a specific "guest" role
