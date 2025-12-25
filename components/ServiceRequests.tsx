@@ -206,7 +206,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       if (window.mappls && window.mappls.search) {
           searchTimeoutRef.current = setTimeout(() => {
               try {
-                  const searchOptions: any = { q: query };
+                  const searchOptions: any = { q: query, pod: 'City,Locality,POI' };
                   
                   if (pickedLocation) {
                       searchOptions.location = `${pickedLocation.lat},${pickedLocation.lng}`;
@@ -234,8 +234,8 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   };
 
   const handleSelectSuggestion = (item: any) => {
-      const lat = parseFloat(item.latitude || item.lat);
-      const lng = parseFloat(item.longitude || item.lng);
+      const lat = parseFloat(item.latitude || item.lat || item.entryLatitude);
+      const lng = parseFloat(item.longitude || item.lng || item.entryLongitude);
       
       if (!isNaN(lat) && !isNaN(lng)) {
           const pos = { lat, lng };
@@ -250,6 +250,8 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
           setMapSearchQuery(item.placeName || item.placeAddress || '');
           setSearchSuggestions([]);
           setPickedAddress(item.placeName || item.placeAddress || '');
+      } else {
+          alert("Selected location details are incomplete. Please try searching.");
       }
   };
 
@@ -279,13 +281,18 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               }
           }
 
-          if (results.length > 0) {
-              const first = results[0];
-              const lat = parseFloat(first.latitude || first.lat);
-              const lng = parseFloat(first.longitude || first.lng);
+          // Find first result with valid coordinates
+          const validResult = results.find(r => {
+              const lat = parseFloat(r.latitude || r.lat || r.entryLatitude);
+              const lng = parseFloat(r.longitude || r.lng || r.entryLongitude);
+              return !isNaN(lat) && !isNaN(lng);
+          });
+
+          if (validResult) {
+              const lat = parseFloat(validResult.latitude || validResult.lat || validResult.entryLatitude);
+              const lng = parseFloat(validResult.longitude || validResult.lng || validResult.entryLongitude);
               
-              if (!isNaN(lat) && !isNaN(lng)) {
-                  const pos = { lat, lng };
+              const pos = { lat, lng };
                   if (mapInstance.current) {
                       mapInstance.current.setCenter(pos);
                       mapInstance.current.setZoom(16);
@@ -294,8 +301,10 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                       markerInstance.current.setPosition(pos);
                   }
                   setPickedLocation(pos);
-                  setPickedAddress(first.placeName || first.placeAddress || '');
-              }
+                  setPickedAddress(validResult.placeName || validResult.placeAddress || '');
+                  setSearchSuggestions([]);
+          } else {
+              alert("Location not found or invalid coordinates.");
           }
       });
   };
