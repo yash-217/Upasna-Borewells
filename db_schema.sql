@@ -48,13 +48,15 @@ create table public.service_requests (
 );
 
 -- 4. EXPENSES TABLE
-CREATE TABLE public.expenses (
-    id SERIAL PRIMARY KEY,
-    date DATE NOT NULL,
-    type VARCHAR(50) NOT NULL CHECK (type IN ('Fuel', 'Maintenance', 'Salary', 'Miscellaneous')),
-    amount DECIMAL(10, 2) NOT NULL,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+create table public.expenses (
+  id uuid default uuid_generate_v4() primary key,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  date date not null,
+  type text not null check (type in ('Fuel', 'Maintenance', 'Salary', 'Miscellaneous')),
+  amount numeric not null,
+  description text,
+  last_edited_by text,
+  last_edited_at text
 );
 
 -- ROW LEVEL SECURITY (RLS) POLICIES
@@ -64,20 +66,18 @@ alter table public.products enable row level security;
 alter table public.employees enable row level security;
 alter table public.service_requests enable row level security;
 alter table public.expenses enable row level security;
+-- Products Policies
+CREATE POLICY "Enable read access for all users" ON public.products FOR SELECT USING (true);
+CREATE POLICY "Enable write access for authenticated users" ON public.products FOR ALL USING (auth.role() = 'authenticated');
 
--- Policy: Allow full access to authenticated users
-create policy "Allow full access to authenticated users" on public.products
-  for all to authenticated using (true) with check (true);
+-- Employees Policies
+CREATE POLICY "Enable read access for all users" ON public.employees FOR SELECT USING (true);
+CREATE POLICY "Enable write access for authenticated users" ON public.employees FOR ALL USING (auth.role() = 'authenticated');
 
-create policy "Allow full access to authenticated users" on public.employees
-  for all to authenticated using (true) with check (true);
+-- Service Requests Policies
+CREATE POLICY "Enable read access for all users" ON public.service_requests FOR SELECT USING (true);
+CREATE POLICY "Enable write access for authenticated users" ON public.service_requests FOR ALL USING (auth.role() = 'authenticated');
 
-create policy "Allow full access to authenticated users" on public.service_requests
-  for all to authenticated using (true) with check (true);
-
-create policy "Allow full access to authenticated users" on public.expenses
-  for all to authenticated using (true) with check (true);
-
--- Optional: Allow Guest (Read-Only) if you implement a specific "guest" role
--- create policy "Allow read access to guests" on public.products
---   for select to authenticated using (auth.jwt() ->> 'email' = 'guest@upasna.local');
+-- Expenses Policies
+CREATE POLICY "Enable read access for all users" ON public.expenses FOR SELECT USING (true);
+CREATE POLICY "Enable write access for authenticated users" ON public.expenses FOR ALL USING (auth.role() = 'authenticated');

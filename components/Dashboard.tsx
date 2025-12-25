@@ -1,17 +1,19 @@
 import React from 'react';
 import { ServiceRequest, ServiceStatus, Employee } from '../types';
+import { Expense } from './Expenses';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { DollarSign, TrendingUp, Users, Activity, AlertCircle } from 'lucide-react';
+import { DollarSign, TrendingUp, Users, Activity, AlertCircle, TrendingDown } from 'lucide-react';
 
 interface DashboardProps {
   requests: ServiceRequest[];
   employees: Employee[];
+  expenses: Expense[];
   vehicleFilter: string;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehicleFilter }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, expenses, vehicleFilter }) => {
   // Filter Data based on Vehicle
   const filteredRequests = vehicleFilter === 'All Vehicles' 
     ? requests 
@@ -25,6 +27,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehic
   const totalRevenue = filteredRequests
     .filter(r => r.status === ServiceStatus.COMPLETED)
     .reduce((sum, r) => sum + r.totalCost, 0);
+
+  const totalExpenses = expenses
+    .filter(e => vehicleFilter === 'All Vehicles' || e.description.includes(vehicleFilter) || e.type === 'Fuel') // Basic filtering for expenses
+    .reduce((sum, e) => sum + e.amount, 0);
 
   const pendingRequests = filteredRequests.filter(r => r.status !== ServiceStatus.COMPLETED && r.status !== ServiceStatus.CANCELLED).length;
   
@@ -62,7 +68,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehic
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
         {/* Stat Cards */}
         <div className="bg-white dark:bg-neutral-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
           <div className="flex justify-between items-start">
@@ -76,6 +82,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, vehic
           </div>
           <span className="text-xs text-slate-400 dark:text-neutral-500 font-medium mt-2 block">
              {vehicleFilter === 'All Vehicles' ? 'Total across all vehicles' : `For ${vehicleFilter}`}
+          </span>
+        </div>
+
+        <div className="bg-white dark:bg-neutral-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm font-medium text-slate-500 dark:text-neutral-400">Expenses</p>
+              <h3 className="text-2xl font-bold text-slate-800 dark:text-white mt-1">₹{totalExpenses.toLocaleString()}</h3>
+            </div>
+            <div className="p-2 bg-red-50 dark:bg-red-900/30 rounded-lg text-red-600 dark:text-red-400">
+              <TrendingDown size={20} />
+            </div>
+          </div>
+          <span className="text-xs text-slate-400 dark:text-neutral-500 font-medium mt-2 block">
+             Total recorded expenses
           </span>
         </div>
 

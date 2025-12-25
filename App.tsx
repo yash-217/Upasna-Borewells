@@ -15,12 +15,14 @@ import {
   CheckCircle,
   AlertCircle,
   Info,
-  X
+  X,
+  PieChart
 } from 'lucide-react';
 import { ServiceRequests } from './components/ServiceRequests';
 import { Dashboard } from './components/Dashboard';
 import { Inventory } from './components/Inventory';
 import { Employees } from './components/Employees';
+import { Expenses, Expense } from './components/Expenses';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { Employee, Product, ServiceRequest, User } from './types';
 import { VEHICLES } from './constants';
@@ -36,6 +38,7 @@ enum View {
   REQUESTS = 'Service Requests',
   INVENTORY = 'Inventory',
   EMPLOYEES = 'Employees',
+  EXPENSES = 'Expenses',
 }
 // --- Slick Splash Screen Component ---
 const SplashScreen = () => (
@@ -87,6 +90,7 @@ export default function App() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   // Confirmation Modal State
   const [confirmState, setConfirmState] = useState<{
@@ -153,6 +157,7 @@ export default function App() {
         setRequests([]);
         setProducts([]);
         setEmployees([]);
+        setExpenses([]);
         setIsLoading(false);
       }
     });
@@ -164,15 +169,17 @@ export default function App() {
     // Keep loading true while fetching data to show splash screen
     setIsLoading(true);
     try {
-      const [reqRes, prodRes, empRes] = await Promise.all([
+      const [reqRes, prodRes, empRes, expRes] = await Promise.all([
         supabase.from('service_requests').select('*').order('date', { ascending: false }),
         supabase.from('products').select('*').order('name'),
-        supabase.from('employees').select('*').order('name')
+        supabase.from('employees').select('*').order('name'),
+        supabase.from('expenses').select('*').order('date', { ascending: false })
       ]);
 
       if (reqRes.data) setRequests(reqRes.data.map(mapRequestFromDB));
       if (prodRes.data) setProducts(prodRes.data.map(mapProductFromDB));
       if (empRes.data) setEmployees(empRes.data.map(mapEmployeeFromDB));
+      if (expRes.data) setExpenses(expRes.data.map((e: any) => ({ ...e, amount: Number(e.amount) })));
       
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -228,6 +235,7 @@ export default function App() {
       setRequests([]);
       setProducts([]);
       setEmployees([]);
+      setExpenses([]);
       setIsLoading(false);
     } else {
       await supabase.auth.signOut();
@@ -363,6 +371,33 @@ export default function App() {
         }
       }
     );
+  };
+
+  // Expenses
+  const handleAddExpense = async (exp: Expense) => {
+    // Prepare DB object (remove ID to let DB generate it, map fields)
+    const { id, ...rest } = exp;
+    const dbData = {
+      ...rest,
+      last_edited_by: currentUser?.name,
+      last_edited_at: new Date().toISOString()
+    };
+    
+    const { data, error } = await supabase.from('expenses').insert(dbData).select().single();
+    if (error) {
+      console.error("Error adding expense:", error);
+      return;
+    }
+    if (data) {
+      setExpenses([{ ...data, amount: Number(data.amount) }, ...expenses]);
+    }
+  };
+
+  const handleDeleteExpense = async (id: string) => {
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
+    if (!error) {
+      setExpenses(expenses.filter(e => e.id !== id));
+    }
   };
 
   // Gesture Handlers
@@ -535,7 +570,8 @@ export default function App() {
           <NavItem view={View.DASHBOARD} icon={LayoutDashboard} />
           <NavItem view={View.REQUESTS} icon={Wrench} />
           <NavItem view={View.INVENTORY} icon={Package} />
-          <NavItem view={View.EMPLOYEES} icon={UsersIcon} />          
+          <NavItem view={View.EMPLOYEES} icon={UsersIcon} />
+          <NavItem view={View.EXPENSES} icon={PieChart} />
         </nav>
 
         {/* Mobile specific label for sidebar */}
@@ -645,7 +681,7 @@ export default function App() {
         <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6 lg:p-8">
           {currentView === View.DASHBOARD && (
             <div className="animate-in fade-in duration-500">
-               <Dashboard requests={requests} employees={employees} vehicleFilter={vehicleFilter} />
+               <Dashboard requests={requests} employees={employees} expenses={expenses} vehicleFilter={vehicleFilter} />
             </div>
           )}
           {currentView === View.REQUESTS && (
@@ -689,6 +725,18 @@ export default function App() {
               />
             </div>
           )}
+          {currentView === View.EXPENSES && (
+            <div className="animate-in fade-in duration-500">
+              <Expenses 
+                expenses={expenses}
+                onAdd={handleAddExpense}
+                onDelete={handleDeleteExpense}
+                isReadOnly={currentUser.isGuest}
+                vehicleFilter={vehicleFilter}
+                onResetFilters={handleResetFilters}
+              />
+            </div>
+          )}
         </div>
       </main>
 
@@ -698,6 +746,7 @@ export default function App() {
         <BottomNavItem view={View.REQUESTS} icon={Wrench} label="Requests" />
         <BottomNavItem view={View.INVENTORY} icon={Package} label="Stock" />
         <BottomNavItem view={View.EMPLOYEES} icon={UsersIcon} label="Team" />
+        <BottomNavItem view={View.EXPENSES} icon={PieChart} label="Expenses" />
       </div>
     </div>
   );
