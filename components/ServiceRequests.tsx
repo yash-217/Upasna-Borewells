@@ -90,11 +90,26 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
                 // Default to Chhatrapati Sambhajinagar
                 const defaultCenter = { lat: 19.8762, lng: 75.3433 };
+                // Determine initial map center and zoom
+                let center = { lat: 19.8762, lng: 75.3433 }; // Default: Chhatrapati Sambhajinagar
+                let zoom = 12;
+                let markerPos = center;
+
+                // 2. If we have a picked location or existing form data, prioritize that
+                const activeLoc = pickedLocation || (formData.latitude && formData.longitude ? { lat: formData.latitude, lng: formData.longitude } : null);
+                if (activeLoc) {
+                    center = activeLoc;
+                    markerPos = activeLoc;
+                    zoom = 16;
+                    if (!pickedLocation) setPickedLocation(activeLoc); // Sync state if opening existing
+                }
                 
                 // Use ID string for container
                 const mapObj = new mappls.Map('mappls-map-picker', {
                     center: defaultCenter,
                     zoom: 12,
+                    center: center,
+                    zoom: zoom,
                     zoomControl: true,
                     scrollWheel: true,
                     draggable: true,
@@ -105,6 +120,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                 markerInstance.current = new mappls.Marker({
                     map: mapObj,
                     position: defaultCenter,
+                    position: markerPos,
                     draggable: true
                 });
 
@@ -202,8 +218,12 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                   }
 
                   new window.mappls.search(searchOptions, (data: any) => {
-                      if (data && Array.isArray(data)) {
-                          setSearchSuggestions(data);
+                      if (data) {
+                          if (Array.isArray(data)) {
+                              setSearchSuggestions(data);
+                          } else if (data.suggestedLocations) {
+                              setSearchSuggestions(data.suggestedLocations);
+                          }
                       }
                   });
               } catch (e) {
@@ -250,8 +270,17 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
       new window.mappls.search(searchOptions, (data: any) => {
           setIsSearching(false);
-          if (data && data.length > 0) {
-              const first = data[0];
+          let results: any[] = [];
+          if (data) {
+              if (Array.isArray(data)) {
+                  results = data;
+              } else if (data.suggestedLocations) {
+                  results = data.suggestedLocations;
+              }
+          }
+
+          if (results.length > 0) {
+              const first = results[0];
               const lat = parseFloat(first.latitude || first.lat);
               const lng = parseFloat(first.longitude || first.lng);
               
