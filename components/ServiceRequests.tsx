@@ -7,16 +7,17 @@ interface ServiceRequestsProps {
   requests: ServiceRequest[];
   products: Product[];
   currentUser: User;
-  onAddRequest: (req: ServiceRequest) => void;
-  onUpdateRequest: (req: ServiceRequest) => void;
+  onAddRequest: (req: ServiceRequest) => Promise<void> | void;
+  onUpdateRequest: (req: ServiceRequest) => Promise<void> | void;
   onDeleteRequest: (id: string) => void;
   vehicleFilter: string;
   isReadOnly?: boolean;
   onResetFilters?: () => void;
+  showToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
 export const ServiceRequests: React.FC<ServiceRequestsProps> = ({ 
-  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters
+  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters, showToast
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<ServiceRequest | null>(null);
@@ -33,6 +34,8 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   const searchTimeoutRef = useRef<any>(null);
   const [pickedAddress, setPickedAddress] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [errors, setErrors] = useState<Record<string, boolean>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Map State & Refs
   const [isMapOpen, setIsMapOpen] = useState(false);
@@ -54,7 +57,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       }
 
       if (!apiKey) {
-        alert("Mappls API Key is missing! Please check your .env file.");
+        showToast("Mappls API Key is missing! Please check your .env file.", "error");
         reject(new Error("VITE_MAPPLS_API_KEY is missing"));
         return;
       }
@@ -184,10 +187,9 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
           // Format as "Lat, Lng" string since we don't have reverse geocoding API key guaranteed
           if (pickedAddress) {
               updates.location = pickedAddress;
-          } else {
-              updates.location = `${pickedLocation.lat.toFixed(6)}, ${pickedLocation.lng.toFixed(6)}`;
           }
           setFormData({ ...formData, ...updates });
+          setErrors(prev => ({ ...prev, location: false }));
       }
       setIsMapOpen(false);
   };
@@ -251,7 +253,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
           setSearchSuggestions([]);
           setPickedAddress(item.placeName || item.placeAddress || '');
       } else {
-          alert("Selected location details are incomplete. Please try searching.");
+          showToast("Selected location details are incomplete. Please try searching.", "error");
       }
   };
 
@@ -304,7 +306,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                   setPickedAddress(validResult.placeName || validResult.placeAddress || '');
                   setSearchSuggestions([]);
           } else {
-              alert("Location not found or invalid coordinates.");
+              showToast("Location not found or invalid coordinates.", "error");
           }
       });
   };
@@ -329,11 +331,11 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         },
         (error) => {
           console.error("Error getting location:", error);
-          alert("Unable to retrieve your location.");
+          showToast("Unable to retrieve your location.", "error");
         }
       );
     } else {
-      alert("Geolocation is not supported by this browser.");
+      showToast("Geolocation is not supported by this browser.", "error");
     }
   };
 
@@ -346,7 +348,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                   } else if (data && data.results && Array.isArray(data.results) && data.results.length > 0) {
                        setPickedAddress(data.results[0].formatted_address);
                   } else {
-                       setPickedAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+                       setPickedAddress('');
                   }
               });
           } catch (e) {
@@ -488,53 +490,83 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   };
   
   const validateForm = (): boolean => {
+    const newErrors: Record<string, boolean> = {};
+    let isValid = true;
+
     if (!formData.customerName?.trim()) {
-      alert("Customer Name is required");
-      return false;
+      newErrors.customerName = true;
+      isValid = false;
     }
     if (!formData.phone?.match(/^(\+91\s?)?\d{10}$/)) {
-      alert("Please enter a valid phone number");
+      newErrors.phone = true;
+      isValid = false;
+    }
+
+    setErrors(newErrors);
+    if (!isValid) {
+      if (newErrors.customerName) showToast("Customer Name is required", "error");
+      else if (newErrors.phone) showToast("Please enter a valid phone number", "error");
       return false;
     }
     if ((formData.totalCost || 0) < 0) {
-      alert("Total cost cannot be negative");
+      showToast("Total cost cannot be negative", "error");
       return false;
     }
     if ((formData.casingDepth || 0) > (formData.drillingDepth || 0)) {
-      alert("Casing depth cannot be greater than drilling depth");
+      showToast("Casing depth cannot be greater than drilling depth", "error");
       return false;
     }
     if ((formData.casing10Depth || 0) > (formData.drillingDepth || 0)) {
-      alert("10\" Casing depth cannot be greater than drilling depth");
+      showToast("10\" Casing depth cannot be greater than drilling depth", "error");
       return false;
     }
     return true;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Add Validation Check
     if (!validateForm()) return;
-    const timestamp = new Date().toLocaleString();
-    if (editingRequest) {
-      onUpdateRequest({ 
-        ...editingRequest, 
-        ...formData,
-        lastEditedBy: currentUser.name,
-        lastEditedAt: timestamp
-      } as ServiceRequest);
-    } else {
-      onAddRequest({
-        ...formData,
-        id: Math.random().toString(36).substr(2, 9),
-        lastEditedBy: currentUser.name,
-        lastEditedAt: timestamp
-      } as ServiceRequest);
+
+    if (!formData.location?.trim()) {
+      if (!window.confirm("No location has been selected. Do you want to proceed without a location?")) {
+        setErrors(prev => ({ ...prev, location: true }));
+        return;
+      }
     }
-    closeModal();
+
+    setIsSubmitting(true);
+    const timestamp = new Date().toLocaleString();
+    
+    try {
+      if (editingRequest) {
+        await onUpdateRequest({ 
+          ...editingRequest, 
+          ...formData,
+          lastEditedBy: currentUser.name,
+          lastEditedAt: timestamp
+        } as ServiceRequest);
+        showToast("Service request updated successfully", "success");
+      } else {
+        await onAddRequest({
+          ...formData,
+          id: Math.random().toString(36).substr(2, 9),
+          lastEditedBy: currentUser.name,
+          lastEditedAt: timestamp
+        } as ServiceRequest);
+        showToast("Service request created successfully", "success");
+      }
+      closeModal();
+    } catch (error) {
+      console.error("Error submitting request:", error);
+      showToast("Failed to save request. Please try again.", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const openModal = (req?: ServiceRequest) => {
+    setErrors({});
     if (req) {
       setEditingRequest(req);
       setFormData(req);
@@ -823,19 +855,34 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Customer Name</label>
-                    <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                      value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} />
+                    <input disabled={isReadOnly} required type="text" className={`w-full bg-white dark:bg-black border rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white ${errors.customerName ? 'border-red-500' : 'border-slate-200 dark:border-neutral-800'}`}
+                      value={formData.customerName} onChange={e => {
+                        setFormData({...formData, customerName: e.target.value});
+                        if (errors.customerName && e.target.value.trim()) {
+                          setErrors(prev => ({ ...prev, customerName: false }));
+                        }
+                      }} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Phone</label>
-                    <input disabled={isReadOnly} required type="tel" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                      value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                    <input disabled={isReadOnly} required type="tel" className={`w-full bg-white dark:bg-black border rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white ${errors.phone ? 'border-red-500' : 'border-slate-200 dark:border-neutral-800'}`}
+                      value={formData.phone} onChange={e => {
+                        setFormData({...formData, phone: e.target.value});
+                        if (errors.phone) {
+                           setErrors(prev => ({ ...prev, phone: false }));
+                        }
+                      }} />
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Location</label>
                     <div className="flex gap-2">
-                      <input disabled={isReadOnly} required type="text" className="flex-1 bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                        value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} placeholder="Address or Coordinates" />
+                      <input disabled={isReadOnly} required type="text" className={`flex-1 bg-white dark:bg-black border rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white ${errors.location ? 'border-red-500' : 'border-slate-200 dark:border-neutral-800'}`}
+                        value={formData.location} onChange={e => {
+                          setFormData({...formData, location: e.target.value});
+                          if (errors.location && e.target.value.trim()) {
+                            setErrors(prev => ({ ...prev, location: false }));
+                          }
+                        }} placeholder="Address or Coordinates" />
                       {!isReadOnly && (
                         <button type="button" onClick={() => setIsMapOpen(true)} className="px-3 py-2 bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-neutral-700 rounded-lg hover:bg-slate-200 dark:hover:bg-neutral-700 transition-colors" title="Pick on Map">
                            <MapPin size={18} />
@@ -1013,11 +1060,12 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               </div>
 
               <div className="p-6 border-t border-slate-100 dark:border-neutral-800 flex justify-end gap-3 bg-slate-50 dark:bg-neutral-900/50 rounded-b-xl">
-                <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors">
+                <button type="button" onClick={closeModal} disabled={isSubmitting} className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   {isReadOnly ? 'Close' : 'Cancel'}
                 </button>
                 {!isReadOnly && (
-                  <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors">
+                  <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+                    {isSubmitting && <Loader2 size={16} className="animate-spin" />}
                     {editingRequest ? 'Update Request' : 'Create Request'}
                   </button>
                 )}

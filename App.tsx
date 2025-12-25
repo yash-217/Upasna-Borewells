@@ -11,7 +11,11 @@ import {
   LogOut,
   Truck,
   Eye,
-  MapPin
+  MapPin,
+  CheckCircle,
+  AlertCircle,
+  Info,
+  X
 } from 'lucide-react';
 import { ServiceRequests } from './components/ServiceRequests';
 import { Dashboard } from './components/Dashboard';
@@ -69,6 +73,12 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [vehicleFilter, setVehicleFilter] = useState<string>('All Vehicles');
   const [isLoading, setIsLoading] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isVisible: boolean }>({
+    message: '',
+    type: 'info',
+    isVisible: false
+  });
+  const toastTimeoutRef = useRef<any>(null);
   
   // Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -174,6 +184,14 @@ export default function App() {
     }
   };
 
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast({ message, type, isVisible: true });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast(prev => ({ ...prev, isVisible: false }));
+    }, 3000);
+  };
+
   const handleLogin = async () => {
     try {
       const redirectUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
@@ -190,7 +208,7 @@ export default function App() {
       if (error) throw error;
     } catch (error) {
       console.error("Login failed:", error);
-      alert("Failed to login. Please try again.");
+      showToast("Failed to login. Please try again.", "error");
     }
   };
 
@@ -464,6 +482,25 @@ export default function App() {
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
+      {/* Toast Notification */}
+      <div className={`fixed top-4 right-4 z-[100] transition-all duration-300 transform ${toast.isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'}`}>
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-white min-w-[300px] ${
+          toast.type === 'success' ? 'bg-green-600' : 
+          toast.type === 'error' ? 'bg-red-600' : 'bg-blue-600'
+        }`}>
+          {toast.type === 'success' && <CheckCircle size={20} />}
+          {toast.type === 'error' && <AlertCircle size={20} />}
+          {toast.type === 'info' && <Info size={20} />}
+          <p className="flex-1 text-sm font-medium">{toast.message}</p>
+          <button 
+            onClick={() => setToast(prev => ({ ...prev, isVisible: false }))}
+            className="p-1 hover:bg-white/20 rounded-full transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+
       {/* Confirmation Modal */}
       <ConfirmationModal 
         isOpen={confirmState.isOpen}
@@ -623,6 +660,7 @@ export default function App() {
                 vehicleFilter={vehicleFilter}
                 isReadOnly={currentUser.isGuest}
                 onResetFilters={handleResetFilters}
+                showToast={showToast}
               />
             </div>
           )}
