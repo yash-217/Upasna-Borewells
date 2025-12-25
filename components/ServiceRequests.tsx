@@ -190,7 +190,18 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       if (window.mappls && window.mappls.search) {
           searchTimeoutRef.current = setTimeout(() => {
               try {
-                  new window.mappls.search({ q: query }, (data: any) => {
+                  const searchOptions: any = { q: query };
+                  
+                  if (pickedLocation) {
+                      searchOptions.location = `${pickedLocation.lat},${pickedLocation.lng}`;
+                  } else if (mapInstance.current && typeof mapInstance.current.getCenter === 'function') {
+                      const center = mapInstance.current.getCenter();
+                      if (center) {
+                          searchOptions.location = `${center.lat},${center.lng}`;
+                      }
+                  }
+
+                  new window.mappls.search(searchOptions, (data: any) => {
                       if (data && Array.isArray(data)) {
                           setSearchSuggestions(data);
                       }
@@ -226,7 +237,18 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       if (!mapSearchQuery.trim() || !window.mappls || !window.mappls.search) return;
 
       setIsSearching(true);
-      new window.mappls.search({ q: mapSearchQuery }, (data: any) => {
+      
+      const searchOptions: any = { q: mapSearchQuery };
+      if (pickedLocation) {
+          searchOptions.location = `${pickedLocation.lat},${pickedLocation.lng}`;
+      } else if (mapInstance.current && typeof mapInstance.current.getCenter === 'function') {
+          const center = mapInstance.current.getCenter();
+          if (center) {
+              searchOptions.location = `${center.lat},${center.lng}`;
+          }
+      }
+
+      new window.mappls.search(searchOptions, (data: any) => {
           setIsSearching(false);
           if (data && data.length > 0) {
               const first = data[0];
@@ -293,6 +315,18 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               console.error("Reverse geocode error", e);
           }
       }
+  };
+
+  const highlightMatch = (text: string, query: string) => {
+      if (!query || !text) return text;
+      const cleanQuery = query.trim();
+      if (!cleanQuery) return text;
+      const escapedQuery = cleanQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
+      return parts.map((part, i) => 
+        part.toLowerCase() === cleanQuery.toLowerCase() ? 
+          <span key={i} className="text-blue-600 dark:text-blue-400 font-bold">{part}</span> : part
+      );
   };
 
   // Form State - Simplified now that ServiceRequest has all fields
@@ -975,11 +1009,23 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                     <input 
                       type="text" 
                       placeholder="Search for a place..." 
-                      className="w-full bg-slate-100 dark:bg-neutral-800 border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white"
+                      className="w-full bg-slate-100 dark:bg-neutral-800 border-none rounded-lg pl-4 pr-10 py-2 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white"
                       value={mapSearchQuery}
                       onChange={handleSearchInputChange}
                       onKeyDown={(e) => e.key === 'Enter' && handleMapSearch()}
                     />
+                    {mapSearchQuery && (
+                        <button 
+                            onClick={() => {
+                                setMapSearchQuery('');
+                                setSearchSuggestions([]);
+                                if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-neutral-300 p-1"
+                        >
+                            <X size={16} />
+                        </button>
+                    )}
                     {searchSuggestions.length > 0 && (
                         <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-lg shadow-lg max-h-60 overflow-y-auto z-50">
                             {searchSuggestions.map((item, idx) => (
@@ -988,8 +1034,8 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                                     onClick={() => handleSelectSuggestion(item)}
                                     className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-neutral-800 text-slate-700 dark:text-neutral-200 border-b border-slate-100 dark:border-neutral-800 last:border-0"
                                 >
-                                    <div className="font-medium">{item.placeName}</div>
-                                    <div className="text-xs text-slate-500 dark:text-neutral-400 truncate">{item.placeAddress}</div>
+                                    <div className="font-medium">{highlightMatch(item.placeName, mapSearchQuery)}</div>
+                                    <div className="text-xs text-slate-500 dark:text-neutral-400 truncate">{highlightMatch(item.placeAddress, mapSearchQuery)}</div>
                                 </button>
                             ))}
                         </div>
