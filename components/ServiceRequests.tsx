@@ -7,17 +7,16 @@ interface ServiceRequestsProps {
   requests: ServiceRequest[];
   products: Product[];
   currentUser: User;
-  onAddRequest: (req: ServiceRequest) => Promise<void> | void;
-  onUpdateRequest: (req: ServiceRequest) => Promise<void> | void;
+  onAddRequest: (req: ServiceRequest) => void;
+  onUpdateRequest: (req: ServiceRequest) => void;
   onDeleteRequest: (id: string) => void;
   vehicleFilter: string;
   isReadOnly?: boolean;
   onResetFilters?: () => void;
-  showToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
 export const ServiceRequests: React.FC<ServiceRequestsProps> = ({ 
-  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters, showToast
+  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<ServiceRequest | null>(null);
@@ -34,8 +33,6 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   const searchTimeoutRef = useRef<any>(null);
   const [pickedAddress, setPickedAddress] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [errors, setErrors] = useState<Record<string, boolean>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Map State & Refs
   const [isMapOpen, setIsMapOpen] = useState(false);
@@ -57,7 +54,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       }
 
       if (!apiKey) {
-        showToast("Mappls API Key is missing! Please check your .env file.", "error");
+        alert("Mappls API Key is missing! Please check your .env file.");
         reject(new Error("VITE_MAPPLS_API_KEY is missing"));
         return;
       }
@@ -93,26 +90,11 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
                 // Default to Chhatrapati Sambhajinagar
                 const defaultCenter = { lat: 19.8762, lng: 75.3433 };
-                // Determine initial map center and zoom
-                let center = { lat: 19.8762, lng: 75.3433 }; // Default: Chhatrapati Sambhajinagar
-                let zoom = 12;
-                let markerPos = center;
-
-                // 2. If we have a picked location or existing form data, prioritize that
-                const activeLoc = pickedLocation || (formData.latitude && formData.longitude ? { lat: formData.latitude, lng: formData.longitude } : null);
-                if (activeLoc) {
-                    center = activeLoc;
-                    markerPos = activeLoc;
-                    zoom = 16;
-                    if (!pickedLocation) setPickedLocation(activeLoc); // Sync state if opening existing
-                }
                 
                 // Use ID string for container
                 const mapObj = new mappls.Map('mappls-map-picker', {
                     center: defaultCenter,
                     zoom: 12,
-                    center: center,
-                    zoom: zoom,
                     zoomControl: true,
                     scrollWheel: true,
                     draggable: true,
@@ -120,45 +102,25 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                 });
 
                 mapInstance.current = mapObj;
-                markerInstance.current = new mappls.Marker({
-                    map: mapObj,
-                    position: defaultCenter,
-                    position: markerPos,
-                    draggable: true
-                });
-
-                markerInstance.current.addListener('dragend', (e: any) => {
-                    if (e && e.target && typeof e.target.getPosition === 'function') {
-                        const pos = e.target.getPosition();
-                        setPickedLocation({ lat: Number(pos.lat), lng: Number(pos.lng) });
-                        fetchAddress(Number(pos.lat), Number(pos.lng));
-                    }
-                });
                 
                 if (mapObj && typeof mapObj.addListener === 'function') {
-                    mapObj.addListener('click', (e: any) => {
-                        if (e && e.lngLat) {
-                            const lat = e.lngLat.lat;
-                            const lng = e.lngLat.lng;
-                            
-                            if (markerInstance.current) {
-                                markerInstance.current.setPosition({ lat, lng });
-                            } else {
-                                markerInstance.current = new mappls.Marker({
-                                    map: mapObj,
-                                    position: { lat, lng },
-                                    draggable: true
-                                });
-                                markerInstance.current.addListener('dragend', (e: any) => {
-                                    if (e && e.target && typeof e.target.getPosition === 'function') {
-                                        const pos = e.target.getPosition();
-                                        setPickedLocation({ lat: Number(pos.lat), lng: Number(pos.lng) });
-                                        fetchAddress(Number(pos.lat), Number(pos.lng));
+                    mapObj.addListener('load', () => {
+                        if (mappls.placePicker) {
+                            mappls.placePicker({
+                                map: mapObj,
+                                search: true,
+                                closeBtn: false,
+                                header: true
+                            }, (data: any) => {
+                                if (data) {
+                                    const lat = parseFloat(data.lat || data.latitude || data.entryLatitude);
+                                    const lng = parseFloat(data.lng || data.longitude || data.entryLongitude);
+                                    if (!isNaN(lat) && !isNaN(lng)) {
+                                        setPickedLocation({ lat, lng });
+                                        setPickedAddress(data.placeName || data.placeAddress || '');
                                     }
-                                });
-                            }
-                            setPickedLocation({ lat, lng });
-                            fetchAddress(lat, lng);
+                                }
+                            });
                         }
                     });
                 } else {
@@ -187,9 +149,10 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
           // Format as "Lat, Lng" string since we don't have reverse geocoding API key guaranteed
           if (pickedAddress) {
               updates.location = pickedAddress;
+          } else {
+              updates.location = `${pickedLocation.lat.toFixed(6)}, ${pickedLocation.lng.toFixed(6)}`;
           }
           setFormData({ ...formData, ...updates });
-          setErrors(prev => ({ ...prev, location: false }));
       }
       setIsMapOpen(false);
   };
@@ -208,7 +171,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       if (window.mappls && window.mappls.search) {
           searchTimeoutRef.current = setTimeout(() => {
               try {
-                  const searchOptions: any = { q: query, pod: 'City,Locality,POI' };
+                  const searchOptions: any = { q: query };
                   
                   if (pickedLocation) {
                       searchOptions.location = `${pickedLocation.lat},${pickedLocation.lng}`;
@@ -236,8 +199,8 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   };
 
   const handleSelectSuggestion = (item: any) => {
-      const lat = parseFloat(item.latitude || item.lat || item.entryLatitude);
-      const lng = parseFloat(item.longitude || item.lng || item.entryLongitude);
+      const lat = parseFloat(item.latitude || item.lat);
+      const lng = parseFloat(item.longitude || item.lng);
       
       if (!isNaN(lat) && !isNaN(lng)) {
           const pos = { lat, lng };
@@ -252,8 +215,6 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
           setMapSearchQuery(item.placeName || item.placeAddress || '');
           setSearchSuggestions([]);
           setPickedAddress(item.placeName || item.placeAddress || '');
-      } else {
-          showToast("Selected location details are incomplete. Please try searching.", "error");
       }
   };
 
@@ -283,18 +244,13 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               }
           }
 
-          // Find first result with valid coordinates
-          const validResult = results.find(r => {
-              const lat = parseFloat(r.latitude || r.lat || r.entryLatitude);
-              const lng = parseFloat(r.longitude || r.lng || r.entryLongitude);
-              return !isNaN(lat) && !isNaN(lng);
-          });
-
-          if (validResult) {
-              const lat = parseFloat(validResult.latitude || validResult.lat || validResult.entryLatitude);
-              const lng = parseFloat(validResult.longitude || validResult.lng || validResult.entryLongitude);
+          if (results.length > 0) {
+              const first = results[0];
+              const lat = parseFloat(first.latitude || first.lat);
+              const lng = parseFloat(first.longitude || first.lng);
               
-              const pos = { lat, lng };
+              if (!isNaN(lat) && !isNaN(lng)) {
+                  const pos = { lat, lng };
                   if (mapInstance.current) {
                       mapInstance.current.setCenter(pos);
                       mapInstance.current.setZoom(16);
@@ -303,10 +259,8 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                       markerInstance.current.setPosition(pos);
                   }
                   setPickedLocation(pos);
-                  setPickedAddress(validResult.placeName || validResult.placeAddress || '');
-                  setSearchSuggestions([]);
-          } else {
-              showToast("Location not found or invalid coordinates.", "error");
+                  setPickedAddress(first.placeName || first.placeAddress || '');
+              }
           }
       });
   };
@@ -331,11 +285,11 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         },
         (error) => {
           console.error("Error getting location:", error);
-          showToast("Unable to retrieve your location.", "error");
+          alert("Unable to retrieve your location.");
         }
       );
     } else {
-      showToast("Geolocation is not supported by this browser.", "error");
+      alert("Geolocation is not supported by this browser.");
     }
   };
 
@@ -348,7 +302,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                   } else if (data && data.results && Array.isArray(data.results) && data.results.length > 0) {
                        setPickedAddress(data.results[0].formatted_address);
                   } else {
-                       setPickedAddress('');
+                       setPickedAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
                   }
               });
           } catch (e) {
@@ -490,83 +444,53 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   };
   
   const validateForm = (): boolean => {
-    const newErrors: Record<string, boolean> = {};
-    let isValid = true;
-
     if (!formData.customerName?.trim()) {
-      newErrors.customerName = true;
-      isValid = false;
+      alert("Customer Name is required");
+      return false;
     }
     if (!formData.phone?.match(/^(\+91\s?)?\d{10}$/)) {
-      newErrors.phone = true;
-      isValid = false;
-    }
-
-    setErrors(newErrors);
-    if (!isValid) {
-      if (newErrors.customerName) showToast("Customer Name is required", "error");
-      else if (newErrors.phone) showToast("Please enter a valid phone number", "error");
+      alert("Please enter a valid phone number");
       return false;
     }
     if ((formData.totalCost || 0) < 0) {
-      showToast("Total cost cannot be negative", "error");
+      alert("Total cost cannot be negative");
       return false;
     }
     if ((formData.casingDepth || 0) > (formData.drillingDepth || 0)) {
-      showToast("Casing depth cannot be greater than drilling depth", "error");
+      alert("Casing depth cannot be greater than drilling depth");
       return false;
     }
     if ((formData.casing10Depth || 0) > (formData.drillingDepth || 0)) {
-      showToast("10\" Casing depth cannot be greater than drilling depth", "error");
+      alert("10\" Casing depth cannot be greater than drilling depth");
       return false;
     }
     return true;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Add Validation Check
     if (!validateForm()) return;
-
-    if (!formData.location?.trim()) {
-      if (!window.confirm("No location has been selected. Do you want to proceed without a location?")) {
-        setErrors(prev => ({ ...prev, location: true }));
-        return;
-      }
-    }
-
-    setIsSubmitting(true);
     const timestamp = new Date().toLocaleString();
-    
-    try {
-      if (editingRequest) {
-        await onUpdateRequest({ 
-          ...editingRequest, 
-          ...formData,
-          lastEditedBy: currentUser.name,
-          lastEditedAt: timestamp
-        } as ServiceRequest);
-        showToast("Service request updated successfully", "success");
-      } else {
-        await onAddRequest({
-          ...formData,
-          id: Math.random().toString(36).substr(2, 9),
-          lastEditedBy: currentUser.name,
-          lastEditedAt: timestamp
-        } as ServiceRequest);
-        showToast("Service request created successfully", "success");
-      }
-      closeModal();
-    } catch (error) {
-      console.error("Error submitting request:", error);
-      showToast("Failed to save request. Please try again.", "error");
-    } finally {
-      setIsSubmitting(false);
+    if (editingRequest) {
+      onUpdateRequest({ 
+        ...editingRequest, 
+        ...formData,
+        lastEditedBy: currentUser.name,
+        lastEditedAt: timestamp
+      } as ServiceRequest);
+    } else {
+      onAddRequest({
+        ...formData,
+        id: Math.random().toString(36).substr(2, 9),
+        lastEditedBy: currentUser.name,
+        lastEditedAt: timestamp
+      } as ServiceRequest);
     }
+    closeModal();
   };
 
   const openModal = (req?: ServiceRequest) => {
-    setErrors({});
     if (req) {
       setEditingRequest(req);
       setFormData(req);
@@ -855,34 +779,19 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Customer Name</label>
-                    <input disabled={isReadOnly} required type="text" className={`w-full bg-white dark:bg-black border rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white ${errors.customerName ? 'border-red-500' : 'border-slate-200 dark:border-neutral-800'}`}
-                      value={formData.customerName} onChange={e => {
-                        setFormData({...formData, customerName: e.target.value});
-                        if (errors.customerName && e.target.value.trim()) {
-                          setErrors(prev => ({ ...prev, customerName: false }));
-                        }
-                      }} />
+                    <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                      value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Phone</label>
-                    <input disabled={isReadOnly} required type="tel" className={`w-full bg-white dark:bg-black border rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white ${errors.phone ? 'border-red-500' : 'border-slate-200 dark:border-neutral-800'}`}
-                      value={formData.phone} onChange={e => {
-                        setFormData({...formData, phone: e.target.value});
-                        if (errors.phone) {
-                           setErrors(prev => ({ ...prev, phone: false }));
-                        }
-                      }} />
+                    <input disabled={isReadOnly} required type="tel" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                      value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Location</label>
                     <div className="flex gap-2">
-                      <input disabled={isReadOnly} required type="text" className={`flex-1 bg-white dark:bg-black border rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white ${errors.location ? 'border-red-500' : 'border-slate-200 dark:border-neutral-800'}`}
-                        value={formData.location} onChange={e => {
-                          setFormData({...formData, location: e.target.value});
-                          if (errors.location && e.target.value.trim()) {
-                            setErrors(prev => ({ ...prev, location: false }));
-                          }
-                        }} placeholder="Address or Coordinates" />
+                      <input disabled={isReadOnly} required type="text" className="flex-1 bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                        value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} placeholder="Address or Coordinates" />
                       {!isReadOnly && (
                         <button type="button" onClick={() => setIsMapOpen(true)} className="px-3 py-2 bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-neutral-700 rounded-lg hover:bg-slate-200 dark:hover:bg-neutral-700 transition-colors" title="Pick on Map">
                            <MapPin size={18} />
@@ -1060,12 +969,11 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               </div>
 
               <div className="p-6 border-t border-slate-100 dark:border-neutral-800 flex justify-end gap-3 bg-slate-50 dark:bg-neutral-900/50 rounded-b-xl">
-                <button type="button" onClick={closeModal} disabled={isSubmitting} className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors">
                   {isReadOnly ? 'Close' : 'Cancel'}
                 </button>
                 {!isReadOnly && (
-                  <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
-                    {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+                  <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors">
                     {editingRequest ? 'Update Request' : 'Create Request'}
                   </button>
                 )}
@@ -1090,51 +998,6 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               </div>
             </div>
             
-            <div className="p-2 border-b border-slate-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex gap-2 relative z-10">
-                <div className="relative flex-1">
-                    <input 
-                      type="text" 
-                      placeholder="Search for a place..." 
-                      className="w-full bg-slate-100 dark:bg-neutral-800 border-none rounded-lg pl-4 pr-10 py-2 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white"
-                      value={mapSearchQuery}
-                      onChange={handleSearchInputChange}
-                      onKeyDown={(e) => e.key === 'Enter' && handleMapSearch()}
-                    />
-                    {mapSearchQuery && (
-                        <button 
-                            onClick={() => {
-                                setMapSearchQuery('');
-                                setSearchSuggestions([]);
-                                if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-                            }}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-neutral-300 p-1"
-                        >
-                            <X size={16} />
-                        </button>
-                    )}
-                    {searchSuggestions.length > 0 && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-lg shadow-lg max-h-60 overflow-y-auto z-50">
-                            {searchSuggestions.map((item, idx) => (
-                                <button
-                                    key={idx}
-                                    onClick={() => handleSelectSuggestion(item)}
-                                    className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-neutral-800 text-slate-700 dark:text-neutral-200 border-b border-slate-100 dark:border-neutral-800 last:border-0"
-                                >
-                                    <div className="font-medium">{highlightMatch(item.placeName, mapSearchQuery)}</div>
-                                    <div className="text-xs text-slate-500 dark:text-neutral-400 truncate">{highlightMatch(item.placeAddress, mapSearchQuery)}</div>
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-                <button onClick={handleMapSearch} disabled={isSearching} className="bg-slate-200 dark:bg-neutral-700 text-slate-700 dark:text-neutral-200 px-4 py-2 rounded-lg text-sm font-medium min-w-[80px] flex justify-center items-center disabled:opacity-70">
-                   {isSearching ? <Loader2 size={18} className="animate-spin" /> : 'Search'}
-                </button>
-                <button onClick={handleCurrentLocation} className="bg-slate-200 dark:bg-neutral-700 text-slate-700 dark:text-neutral-200 px-3 py-2 rounded-lg text-sm font-medium" title="Use Current Location">
-                   <Crosshair size={20} />
-                </button>
-            </div>
-
             <div className="flex-1 relative bg-slate-100 dark:bg-neutral-800">
                <div id="mappls-map-picker" ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
                {!mapInstance.current && (
