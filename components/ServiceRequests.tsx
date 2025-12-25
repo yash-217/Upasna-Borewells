@@ -62,14 +62,24 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
       const loadScript = (src: string) => {
           return new Promise((res, rej) => {
-              if (document.querySelector(`script[src="${src}"]`)) {
-                  res(true);
+              const existingScript = document.querySelector(`script[src="${src}"]`);
+              if (existingScript) {
+                  if (existingScript.getAttribute('data-loaded') === 'true') {
+                      res(true);
+                  } else {
+                      existingScript.addEventListener('load', () => res(true));
+                      existingScript.addEventListener('error', rej);
+                  }
                   return;
               }
               const script = document.createElement('script');
               script.src = src;
               script.async = true;
-              script.onload = res;
+              script.setAttribute('data-loaded', 'false');
+              script.onload = () => {
+                  script.setAttribute('data-loaded', 'true');
+                  res(true);
+              };
               script.onerror = rej;
               document.body.appendChild(script);
           });
@@ -193,8 +203,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               try {
                   const searchOptions: any = { 
                       q: query,
-                      pod: 'City,Locality,POI', 
-                      tokenizeAddress: true
+                      pod: 'City,Locality,POI'
                   };
                   
                   if (pickedLocation) {
@@ -213,6 +222,9 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                           } else if (data.suggestedLocations) {
                               setSearchSuggestions(data.suggestedLocations);
                           }
+                      } else {
+                          console.warn("Mappls Search API returned no data. Check API Key permissions.");
+                          setSearchSuggestions([]);
                       }
                   });
               } catch (e) {
@@ -266,6 +278,9 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
               } else if (data.suggestedLocations) {
                   results = data.suggestedLocations;
               }
+          } else {
+              console.error("Mappls Search API failed or returned empty. Data:", data);
+              showToast("Search failed. Please check API configuration.", "error");
           }
 
           // Find first result with valid coordinates
