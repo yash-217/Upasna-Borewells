@@ -63,6 +63,15 @@ export interface DBServiceRequest {
   last_edited_at: string | null;
 }
 
+export interface DBVehicle {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  last_edited_by: string | null;
+  last_edited_at: string | null;
+}
+
 // --- Application Types (Camel Case) ---
 export interface TrackedEntity {
   lastEditedBy?: string;
@@ -114,6 +123,13 @@ export interface Employee extends TrackedEntity {
   salary: number;
   joinDate: string;
   assignedVehicle?: string;
+}
+
+export interface Vehicle extends TrackedEntity {
+  id: string;
+  name: string;
+  type: string; // 'Drilling', 'Support', 'Service', 'Survey'
+  status: string; // 'Active', 'Maintenance', 'Retired'
 }
 
 export interface User {

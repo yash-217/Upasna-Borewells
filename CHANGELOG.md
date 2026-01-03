@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-01-03
+
+### Changes
+
+1. Updated vehicles database
+2. Added versioning
+
 ### Refactor
 - **State Management**: Migrated data fetching from `useEffect` to `@tanstack/react-query` in `App.tsx` for better caching, background updates, and cleaner code.
 - **Environment Variables**: Updated `vite.config.ts` to remove unused `loadEnv` and standardized usage of `import.meta.env` in `services/supabase.ts`.

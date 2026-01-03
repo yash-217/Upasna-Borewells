@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Employee, User } from '../types';
+import { Employee, User, Vehicle } from '../types';
 import { UserPlus, X, Phone, Calendar, DollarSign, Truck, Edit2, Trash2 } from 'lucide-react';
-import { VEHICLES } from '../constants';
 
 interface EmployeesProps {
   employees: Employee[];
+  vehicles: Vehicle[];
   currentUser: User;
   onAddEmployee: (e: Employee) => void;
   onUpdateEmployee: (e: Employee) => void;
@@ -14,12 +14,12 @@ interface EmployeesProps {
 }
 
 export const Employees: React.FC<EmployeesProps> = ({ 
-  employees, currentUser, onAddEmployee, onUpdateEmployee, onDeleteEmployee, vehicleFilter, isReadOnly
+  employees, vehicles, currentUser, onAddEmployee, onUpdateEmployee, onDeleteEmployee, vehicleFilter, isReadOnly
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [formData, setFormData] = useState<Partial<Employee>>({
-    name: '', role: '', phone: '', salary: 0, joinDate: new Date().toISOString().split('T')[0], assignedVehicle: VEHICLES[0]
+    name: '', role: '', phone: '', salary: 0, joinDate: new Date().toISOString().split('T')[0], assignedVehicle: vehicles.length > 0 ? vehicles[0].name : ''
   });
 
   const openModal = (emp?: Employee) => {
@@ -33,7 +33,7 @@ export const Employees: React.FC<EmployeesProps> = ({
       setFormData({ 
         name: '', role: '', phone: '', salary: 0, 
         joinDate: new Date().toISOString().split('T')[0], 
-        assignedVehicle: VEHICLES[0] 
+        assignedVehicle: vehicles.length > 0 ? vehicles[0].name : '' 
       });
     }
     setIsModalOpen(true);
@@ -190,7 +190,7 @@ export const Employees: React.FC<EmployeesProps> = ({
                    <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Assigned Vehicle</label>
                    <select disabled={isReadOnly} className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
                       value={formData.assignedVehicle} onChange={e => setFormData({...formData, assignedVehicle: e.target.value})}>
-                      {VEHICLES.map(v => <option key={v} value={v}>{v}</option>)}
+                      {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
                    </select>
                 </div>
                 

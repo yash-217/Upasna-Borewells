@@ -59,6 +59,16 @@ create table public.expenses (
   last_edited_at text
 );
 
+-- 5. Vehicles TABLE
+CREATE TABLE vehicles (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL, -- e.g., 'Drilling', 'Support', 'Service', 'Survey'
+  status TEXT DEFAULT 'Active', -- 'Active', 'Maintenance', 'Retired'
+  last_edited_by TEXT,
+  last_edited_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- Goal: Authenticated users can do everything. Anon users can do nothing (except login).
 
@@ -81,3 +91,7 @@ CREATE POLICY "Enable write access for authenticated users" ON public.service_re
 -- Expenses Policies
 CREATE POLICY "Enable read access for all users" ON public.expenses FOR SELECT USING (true);
 CREATE POLICY "Enable write access for authenticated users" ON public.expenses FOR ALL USING (auth.role() = 'authenticated');
+
+-- Vehicles Policies
+CREATE POLICY "Enable read access for all users" ON public.vehicles FOR SELECT USING (true);
+CREATE POLICY "Enable write access for authenticated users" ON public.vehicles FOR ALL USING (auth.role() = 'authenticated');

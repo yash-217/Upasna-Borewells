@@ -27,13 +27,13 @@ const Dashboard = React.lazy(() => import('./components/Dashboard').then(module 
 const Inventory = React.lazy(() => import('./components/Inventory').then(module => ({ default: module.Inventory })));
 const Employees = React.lazy(() => import('./components/Employees').then(module => ({ default: module.Employees })));
 const Expenses = React.lazy(() => import('./components/Expenses').then(module => ({ default: module.Expenses })));
-import { Employee, Product, ServiceRequest, User } from './types';
-import { VEHICLES } from './constants';
+import { Employee, Product, ServiceRequest, User, Vehicle } from './types';
 import {
   supabase,
   mapProductFromDB, mapProductToDB,
   mapEmployeeFromDB, mapEmployeeToDB,
-  mapRequestFromDB, mapRequestToDB
+  mapRequestFromDB, mapRequestToDB,
+  mapVehicleFromDB
 } from './services/supabase';
 
 enum View {
@@ -196,8 +196,18 @@ export default function App() {
     enabled: !!currentUser,
   });
 
+  const { data: vehicles = [], isLoading: isVehiclesLoading } = useQuery({
+    queryKey: ['vehicles'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('vehicles').select('*').order('name');
+      if (error) throw error;
+      return data.map(mapVehicleFromDB);
+    },
+    enabled: !!currentUser,
+  });
+
   // Combined Loading State
-  const isLoading = isAuthLoading || (!!currentUser && (isRequestsLoading || isProductsLoading || isEmployeesLoading || isExpensesLoading));
+  const isLoading = isAuthLoading || (!!currentUser && (isRequestsLoading || isProductsLoading || isEmployeesLoading || isExpensesLoading || isVehiclesLoading));
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -679,7 +689,7 @@ export default function App() {
                     className="bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-700 dark:text-neutral-300 w-48 cursor-pointer dark:bg-black focus:outline-none"
                   >
                     <option value="All Vehicles">All Vehicles</option>
-                    {VEHICLES.map(v => <option key={v} value={v}>{v}</option>)}
+                    {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
                   </select>
                </div>
 
@@ -712,7 +722,7 @@ export default function App() {
                     className="w-full bg-transparent border-none text-sm font-medium text-slate-700 dark:text-neutral-300 focus:outline-none"
                   >
                     <option value="All Vehicles">All Vehicles</option>
-                    {VEHICLES.map(v => <option key={v} value={v}>{v}</option>)}
+                    {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
                   </select>
                </div>
             </div>
@@ -735,6 +745,7 @@ export default function App() {
               <ServiceRequests 
                 requests={requests} 
                 products={products} 
+                vehicles={vehicles}
                 currentUser={currentUser}
                 onAddRequest={handleAddRequest} 
                 onUpdateRequest={handleUpdateRequest}
@@ -762,6 +773,7 @@ export default function App() {
             <div className="animate-in fade-in duration-500">
               <Employees 
                 employees={employees} 
+                vehicles={vehicles}
                 currentUser={currentUser}
                 onAddEmployee={handleAddEmployee} 
                 onUpdateEmployee={handleUpdateEmployee} 
@@ -775,6 +787,7 @@ export default function App() {
             <div className="animate-in fade-in duration-500">
               <Expenses 
                 expenses={expenses}
+                vehicles={vehicles}
                 onAdd={handleAddExpense}
                 onDelete={handleDeleteExpense}
                 isReadOnly={currentUser.isGuest}

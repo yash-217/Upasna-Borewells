@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { 
-  Employee, Product, ServiceRequest, 
-  DBEmployee, DBProduct, DBServiceRequest,
+  Employee, Product, ServiceRequest, Vehicle,
+  DBEmployee, DBProduct, DBServiceRequest, DBVehicle,
   ServiceType, ServiceStatus
 } from '../types';
 
@@ -188,4 +188,21 @@ export const mapRequestToDB = (r: Partial<ServiceRequest>): Partial<DBServiceReq
   items: r.items,
   last_edited_by: r.lastEditedBy,
   last_edited_at: safeTimestampToDB(r.lastEditedAt)
+});
+
+export const mapVehicleFromDB = (data: DBVehicle): Vehicle => ({
+  id: data.id,
+  name: data.name,
+  type: data.type,
+  status: data.status,
+  lastEditedBy: data.last_edited_by || undefined,
+  lastEditedAt: data.last_edited_at || undefined
+});
+
+export const mapVehicleToDB = (v: Partial<Vehicle>): Partial<DBVehicle> => ({
+  name: v.name,
+  type: v.type,
+  status: v.status,
+  last_edited_by: v.lastEditedBy,
+  last_edited_at: safeTimestampToDB(v.lastEditedAt)
 });

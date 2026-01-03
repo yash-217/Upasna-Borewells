@@ -1,7 +1,7 @@
 import React, { useState, ChangeEvent } from 'react';
 import Tesseract from 'tesseract.js';
 import { Trash2, Search, X, Plus, Truck, Upload, Calendar, DollarSign, FileText, Wrench, FileSpreadsheet } from 'lucide-react';
-import { VEHICLES } from '../constants';
+import { Vehicle } from '../types';
 
 export interface Expense {
   id: string;
@@ -18,6 +18,7 @@ const EXPENSE_TYPES = ['Fuel', 'Maintenance', 'Salary', 'Miscellaneous'] as cons
 
 interface ExpensesProps {
   expenses: Expense[];
+  vehicles: Vehicle[];
   onAdd: (expense: Expense) => void;
   onDelete: (id: string) => void;
   isReadOnly: boolean;
@@ -25,7 +26,7 @@ interface ExpensesProps {
   onResetFilters: () => void;
 }
 
-export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, isReadOnly, vehicleFilter, onResetFilters }) => {
+export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, onAdd, onDelete, isReadOnly, vehicleFilter, onResetFilters }) => {
   // Form State
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
@@ -404,7 +405,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
                 className="w-full px-3 py-2 bg-white dark:bg-black border border-slate-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
               >
                 <option value="">-- Select Vehicle --</option>
-                {VEHICLES.map(v => <option key={v} value={v}>{v}</option>)}
+                {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
               </select>
             </div>
           </div>

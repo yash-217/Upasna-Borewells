@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Product, ServiceRequest, ServiceStatus, ServiceType, ServiceItem, User } from '../types';
+import { Product, ServiceRequest, ServiceStatus, ServiceType, ServiceItem, User, Vehicle } from '../types';
 import { Plus, Search, Filter, Edit2, Trash2, X, Truck, Eye, MapPin, Calendar, Phone, MessageCircle, Crosshair, Map, Loader2 } from 'lucide-react';
-import { VEHICLES } from '../constants';
 
 interface ServiceRequestsProps {
   requests: ServiceRequest[];
   products: Product[];
+  vehicles: Vehicle[];
   currentUser: User;
   onAddRequest: (req: ServiceRequest) => void;
   onUpdateRequest: (req: ServiceRequest) => void;
@@ -17,7 +17,7 @@ interface ServiceRequestsProps {
 }
 
 export const ServiceRequests: React.FC<ServiceRequestsProps> = ({ 
-  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters, showToast
+  requests, products, vehicles, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters, showToast
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<ServiceRequest | null>(null);
@@ -374,7 +374,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     date: new Date().toISOString().split('T')[0],
     type: ServiceType.DRILLING,
     status: ServiceStatus.PENDING,
-    vehicle: VEHICLES[0],
+    vehicle: vehicles.length > 0 ? vehicles[0].name : '',
     items: [],
     notes: '',
     totalCost: 0,
@@ -547,7 +547,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         date: new Date().toISOString().split('T')[0],
         type: ServiceType.DRILLING,
         status: ServiceStatus.PENDING,
-        vehicle: vehicleFilter !== 'All Vehicles' ? vehicleFilter : VEHICLES[0],
+        vehicle: vehicleFilter !== 'All Vehicles' ? vehicleFilter : (vehicles.length > 0 ? vehicles[0].name : ''),
         items: [],
         notes: '',
         totalCost: 0,
@@ -890,7 +890,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Assigned Vehicle</label>
                     <select disabled={isReadOnly} className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
                       value={formData.vehicle} onChange={e => setFormData({...formData, vehicle: e.target.value})}>
-                      {VEHICLES.map(v => <option key={v} value={v}>{v}</option>)}
+                      {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
                     </select>
                   </div>
                    <div>
