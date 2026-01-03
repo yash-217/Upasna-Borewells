@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Product, ServiceRequest, ServiceStatus, ServiceType, ServiceItem, User } from '../types';
-import { Plus, Search, Filter, Edit2, Trash2, X, Truck, Eye, MapPin, Calendar } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, X, Truck, Eye, MapPin, Calendar, Phone, MessageCircle, Crosshair, Map, Loader2 } from 'lucide-react';
 import { VEHICLES } from '../constants';
 
 interface ServiceRequestsProps {
@@ -13,10 +13,11 @@ interface ServiceRequestsProps {
   vehicleFilter: string;
   isReadOnly?: boolean;
   onResetFilters?: () => void;
+  showToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
 export const ServiceRequests: React.FC<ServiceRequestsProps> = ({ 
-  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters
+  requests, products, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters, showToast
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<ServiceRequest | null>(null);
@@ -25,9 +26,11 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isDateFilterOpen, setIsDateFilterOpen] = useState(false);
-  const [tempStartDate, setTempStartDate] = useState('');
-  const [tempEndDate, setTempEndDate] = useState('');
-  const today = new Date().toISOString().split('T')[0];
+  const [mapSearchQuery, setMapSearchQuery] = useState('');
+  const [searchSuggestions, setSearchSuggestions] = useState<any[]>([]);
+  const searchTimeoutRef = useRef<any>(null);
+  const [pickedAddress, setPickedAddress] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   // Map State & Refs
   const [isMapOpen, setIsMapOpen] = useState(false);
@@ -56,10 +59,24 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
       const loadScript = (src: string) => {
           return new Promise((res, rej) => {
+              const existingScript = document.querySelector(`script[src="${src}"]`);
+              if (existingScript) {
+                  if (existingScript.getAttribute('data-loaded') === 'true') {
+                      res(true);
+                  } else {
+                      existingScript.addEventListener('load', () => res(true));
+                      existingScript.addEventListener('error', rej);
+                  }
+                  return;
+              }
               const script = document.createElement('script');
               script.src = src;
               script.async = true;
-              script.onload = res;
+              script.setAttribute('data-loaded', 'false');
+              script.onload = () => {
+                  script.setAttribute('data-loaded', 'true');
+                  res(true);
+              };
               script.onerror = rej;
               document.body.appendChild(script);
           });
@@ -79,40 +96,58 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             loadMapplsScript().then((mappls: any) => {
                 if (mapInstance.current) return; // Already initialized
 
-                // Default to India center
-                const defaultCenter = { lat: 28.62, lng: 77.09 };
+                // Default to Chhatrapati Sambhajinagar
+                const defaultCenter = { lat: 19.8762, lng: 75.3433 };
                 
                 // Use ID string for container
                 const mapObj = new mappls.Map('mappls-map-picker', {
                     center: defaultCenter,
-                    zoom: 5
+                    zoom: 12,
+                    zoomControl: true,
+                    scrollWheel: true,
+                    draggable: true,
+                    clickableIcons: false
                 });
 
                 mapInstance.current = mapObj;
+                markerInstance.current = new mappls.Marker({
+                    map: mapObj,
+                    position: defaultCenter,
+                    draggable: true
+                });
+
+                markerInstance.current.addListener('dragend', (e: any) => {
+                    if (e && e.target && typeof e.target.getPosition === 'function') {
+                        const pos = e.target.getPosition();
+                        setPickedLocation({ lat: Number(pos.lat), lng: Number(pos.lng) });
+                        fetchAddress(Number(pos.lat), Number(pos.lng));
+                    }
+                });
                 
                 if (mapObj && typeof mapObj.addListener === 'function') {
-                    mapObj.addListener('load', () => {
-                        const options = {
-                            map: mapObj,
-                            header: true,
-                            closeBtn: false,
-                        };
-                        
-                        if (mappls.placePicker) {
-                            mappls.placePicker(options, (data: any) => {
-                                if (data && data.data) {
-                                    const loc = data.data;
-                                    // Extract lat/lng safely from plugin response
-                                    const lat = loc.lat ? parseFloat(loc.lat) : (loc.point ? parseFloat(loc.point.lat) : null);
-                                    const lng = loc.lng ? parseFloat(loc.lng) : (loc.point ? parseFloat(loc.point.lng) : null);
-                                    
-                                    if (lat && lng) {
-                                        setPickedLocation({ lat, lng });
+                    mapObj.addListener('click', (e: any) => {
+                        if (e && e.lngLat) {
+                            const lat = e.lngLat.lat;
+                            const lng = e.lngLat.lng;
+                            
+                            if (markerInstance.current) {
+                                markerInstance.current.setPosition({ lat, lng });
+                            } else {
+                                markerInstance.current = new mappls.Marker({
+                                    map: mapObj,
+                                    position: { lat, lng },
+                                    draggable: true
+                                });
+                                markerInstance.current.addListener('dragend', (e: any) => {
+                                    if (e && e.target && typeof e.target.getPosition === 'function') {
+                                        const pos = e.target.getPosition();
+                                        setPickedLocation({ lat: Number(pos.lat), lng: Number(pos.lng) });
+                                        fetchAddress(Number(pos.lat), Number(pos.lng));
                                     }
-                                }
-                            });
-                        } else {
-                            console.error("Mappls placePicker plugin not found");
+                                });
+                            }
+                            setPickedLocation({ lat, lng });
+                            fetchAddress(lat, lng);
                         }
                     });
                 } else {
@@ -133,16 +168,208 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
   const handleConfirmLocation = () => {
       if (pickedLocation) {
+          const updates: Partial<ServiceRequest> = {
+              latitude: pickedLocation.lat,
+              longitude: pickedLocation.lng
+          };
+
           // Format as "Lat, Lng" string since we don't have reverse geocoding API key guaranteed
-          setFormData({ ...formData, location: `${pickedLocation.lat.toFixed(6)}, ${pickedLocation.lng.toFixed(6)}` });
+          if (pickedAddress) {
+              updates.location = pickedAddress;
+          } else {
+              updates.location = `${pickedLocation.lat.toFixed(6)}, ${pickedLocation.lng.toFixed(6)}`;
+          }
+          setFormData({ ...formData, ...updates });
       }
       setIsMapOpen(false);
   };
   
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const query = e.target.value;
+      setMapSearchQuery(query);
+      
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      
+      if (!query.trim()) {
+          setSearchSuggestions([]);
+          return;
+      }
+
+      if (window.mappls && window.mappls.search) {
+          searchTimeoutRef.current = setTimeout(() => {
+              try {
+                  const searchOptions: any = { 
+                      q: query,
+                      pod: 'City,Locality,POI'
+                  };
+                  
+                  if (pickedLocation) {
+                      searchOptions.location = `${pickedLocation.lat},${pickedLocation.lng}`;
+                  } else if (mapInstance.current && typeof mapInstance.current.getCenter === 'function') {
+                      const center = mapInstance.current.getCenter();
+                      if (center) {
+                          searchOptions.location = `${center.lat},${center.lng}`;
+                      }
+                  }
+
+                  new window.mappls.search(searchOptions, (data: any) => {
+                      if (data) {
+                          if (Array.isArray(data)) {
+                              setSearchSuggestions(data);
+                          } else if (data.suggestedLocations) {
+                              setSearchSuggestions(data.suggestedLocations);
+                          }
+                      } else {
+                          console.warn("Mappls Search API returned no data. Check API Key permissions.");
+                          setSearchSuggestions([]);
+                      }
+                  });
+              } catch (e) {
+                  console.error("Search error", e);
+              }
+          }, 300);
+      }
+  };
+
+  const handleSelectSuggestion = (item: any) => {
+      const lat = parseFloat(item.latitude || item.lat);
+      const lng = parseFloat(item.longitude || item.lng);
+      
+      if (!isNaN(lat) && !isNaN(lng)) {
+          const pos = { lat, lng };
+          if (mapInstance.current) {
+              mapInstance.current.setCenter(pos);
+              mapInstance.current.setZoom(16);
+          }
+          if (markerInstance.current) {
+              markerInstance.current.setPosition(pos);
+          }
+          setPickedLocation(pos);
+          setMapSearchQuery(item.placeName || item.placeAddress || '');
+          setSearchSuggestions([]);
+          setPickedAddress(item.placeName || item.placeAddress || '');
+      }
+  };
+
+  const handleMapSearch = () => {
+      if (!mapSearchQuery.trim() || !window.mappls || !window.mappls.search) return;
+
+      setIsSearching(true);
+      
+      const searchOptions: any = { q: mapSearchQuery };
+      if (pickedLocation) {
+          searchOptions.location = `${pickedLocation.lat},${pickedLocation.lng}`;
+      } else if (mapInstance.current && typeof mapInstance.current.getCenter === 'function') {
+          const center = mapInstance.current.getCenter();
+          if (center) {
+              searchOptions.location = `${center.lat},${center.lng}`;
+          }
+      }
+
+      new window.mappls.search(searchOptions, (data: any) => {
+          setIsSearching(false);
+          let results: any[] = [];
+          if (data) {
+              if (Array.isArray(data)) {
+                  results = data;
+              } else if (data.suggestedLocations) {
+                  results = data.suggestedLocations;
+              }
+          } else {
+              console.error("Mappls Search API failed or returned empty. Data:", data);
+              showToast("Search failed. Please check API configuration.", "error");
+          }
+
+          // Find first result with valid coordinates
+          const validResult = results.find(r => {
+              const lat = parseFloat(r.latitude || r.lat || r.entryLatitude);
+              const lng = parseFloat(r.longitude || r.lng || r.entryLongitude);
+              return !isNaN(lat) && !isNaN(lng);
+          });
+
+          if (validResult) {
+              const lat = parseFloat(validResult.latitude || validResult.lat || validResult.entryLatitude);
+              const lng = parseFloat(validResult.longitude || validResult.lng || validResult.entryLongitude);
+              
+              const pos = { lat, lng };
+                  if (mapInstance.current) {
+                      mapInstance.current.setCenter(pos);
+                      mapInstance.current.setZoom(16);
+                  }
+                  if (markerInstance.current) {
+                      markerInstance.current.setPosition(pos);
+                  }
+                  setPickedLocation(pos);
+                  setPickedAddress(validResult.placeName || validResult.placeAddress || '');
+                  setSearchSuggestions([]);
+          } else {
+              showToast("Location not found or invalid coordinates.", "error");
+          }
+      });
+  };
+
+  const handleCurrentLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          const pos = { lat, lng };
+
+          if (mapInstance.current) {
+            mapInstance.current.setCenter(pos);
+            mapInstance.current.setZoom(16);
+          }
+          if (markerInstance.current) {
+            markerInstance.current.setPosition(pos);
+          }
+          setPickedLocation(pos);
+          fetchAddress(lat, lng);
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          showToast("Unable to retrieve your location.", "error");
+        }
+      );
+    } else {
+      showToast("Geolocation is not supported by this browser.", "error");
+    }
+  };
+
+  const fetchAddress = (lat: number, lng: number) => {
+      if (window.mappls && window.mappls.rev_geocode) {
+          try {
+              new window.mappls.rev_geocode({ lat, lng }, (data: any) => {
+                  if (data && Array.isArray(data) && data.length > 0) {
+                       setPickedAddress(data[0].formatted_address);
+                  } else if (data && data.results && Array.isArray(data.results) && data.results.length > 0) {
+                       setPickedAddress(data.results[0].formatted_address);
+                  } else {
+                       setPickedAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+                  }
+              });
+          } catch (e) {
+              console.error("Reverse geocode error", e);
+          }
+      }
+  };
+
+  const highlightMatch = (text: string, query: string) => {
+      if (!query || !text) return text;
+      const cleanQuery = query.trim();
+      if (!cleanQuery) return text;
+      const escapedQuery = cleanQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
+      return parts.map((part, i) => 
+        part.toLowerCase() === cleanQuery.toLowerCase() ? 
+          <span key={i} className="text-blue-600 dark:text-blue-400 font-bold">{part}</span> : part
+      );
+  };
+
   // Form State - Simplified now that ServiceRequest has all fields
   const [formData, setFormData] = useState<Partial<ServiceRequest>>({
     customerName: '',
-    phone: '',
+    phone: '+91 ',
     location: '',
     date: new Date().toISOString().split('T')[0],
     type: ServiceType.DRILLING,
@@ -157,7 +384,9 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     casingRate: 0,
     casingType: '7"',
     casing10Depth: 0,
-    casing10Rate: 0
+    casing10Rate: 0,
+    latitude: undefined,
+    longitude: undefined
   });
 
   // Helper to calculate total cost
@@ -259,23 +488,23 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   
   const validateForm = (): boolean => {
     if (!formData.customerName?.trim()) {
-      alert("Customer Name is required");
+      showToast("Customer Name is required", "error");
       return false;
     }
-    if (!formData.phone?.match(/^\d{10}$/)) {
-      alert("Please enter a valid 10-digit phone number");
+    if (!formData.phone?.match(/^(\+91\s?)?\d{10}$/)) {
+      showToast("Please enter a valid phone number", "error");
       return false;
     }
     if ((formData.totalCost || 0) < 0) {
-      alert("Total cost cannot be negative");
+      showToast("Total cost cannot be negative", "error");
       return false;
     }
     if ((formData.casingDepth || 0) > (formData.drillingDepth || 0)) {
-      alert("Casing depth cannot be greater than drilling depth");
+      showToast("Casing depth cannot be greater than drilling depth", "error");
       return false;
     }
     if ((formData.casing10Depth || 0) > (formData.drillingDepth || 0)) {
-      alert("10\" Casing depth cannot be greater than drilling depth");
+      showToast("10\" Casing depth cannot be greater than drilling depth", "error");
       return false;
     }
     return true;
@@ -313,7 +542,7 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       setEditingRequest(null);
       setFormData({
         customerName: '',
-        phone: '',
+        phone: '+91 ',
         location: '',
         date: new Date().toISOString().split('T')[0],
         type: ServiceType.DRILLING,
@@ -328,7 +557,9 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         casingRate: 0,
         casingType: '7"',
         casing10Depth: 0,
-        casing10Rate: 0
+        casing10Rate: 0,
+        latitude: undefined,
+        longitude: undefined
       });
     }
     setIsModalOpen(true);
@@ -417,23 +648,60 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button 
-              onClick={() => {
-                setTempStartDate(startDate);
-                setTempEndDate(endDate);
-                setIsDateFilterOpen(true);
-              }}
-              className={`flex items-center gap-2 border rounded-lg px-3 py-2 text-sm transition-colors ${
-                startDate || endDate 
-                ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300' 
-                : 'bg-white dark:bg-black border-slate-200 dark:border-neutral-800 text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-neutral-800'
-              }`}
-            >
-              <Calendar size={16} />
-              <span>
-                {startDate || endDate ? `${startDate || 'Start'} - ${endDate || 'End'}` : 'Filter by Date'}
-              </span>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setIsDateFilterOpen(!isDateFilterOpen)}
+                className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm font-medium ${
+                  startDate || endDate
+                    ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
+                    : 'bg-white dark:bg-black border-slate-200 dark:border-neutral-800 text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-neutral-800'
+                }`}
+              >
+                <Calendar size={16} />
+                <span className="hidden sm:inline">{startDate || endDate ? 'Date Active' : 'Filter by Date'}</span>
+              </button>
+
+              {isDateFilterOpen && (
+                <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-slate-200 dark:border-neutral-800 p-4 z-20 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-sm font-semibold text-slate-800 dark:text-white">Date Range</h4>
+                    <button onClick={() => setIsDateFilterOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-300">
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 dark:text-neutral-400 mb-1 block">Start Date</label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        max={endDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 dark:text-neutral-400 mb-1 block">End Date</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        min={startDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                      />
+                    </div>
+                    {(startDate || endDate) && (
+                      <button
+                        onClick={() => { setStartDate(''); setEndDate(''); }}
+                        className="w-full py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      >
+                        Clear Dates
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <Filter size={18} className="text-slate-400 dark:text-neutral-500" />
             <select 
@@ -455,7 +723,11 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
       <div className="flex flex-col gap-4">
         {sortedRequests.length > 0 ? sortedRequests.map(req => (
-          <div key={req.id} className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col hover:shadow-md transition-shadow group">
+          <div 
+            key={req.id} 
+            onClick={() => openModal(req)}
+            className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col hover:shadow-md transition-shadow group cursor-pointer"
+          >
             <div className="p-5 flex-1">
               <div className="flex justify-between items-start mb-3">
                 <div>
@@ -522,11 +794,41 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             
             <div className="bg-slate-50 dark:bg-black/40 px-5 py-3 border-t border-slate-100 dark:border-neutral-800 flex justify-end items-center">
                <div className="flex gap-2">
-                 <button onClick={() => openModal(req)} className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-blue-600 transition-colors">
+                 <a 
+                   href={`https://wa.me/${req.phone.replace(/\D/g, '').length > 10 ? req.phone.replace(/\D/g, '') : '91' + req.phone.replace(/\D/g, '')}`}
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   onClick={(e) => e.stopPropagation()}
+                   className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-green-500 transition-colors"
+                   title="WhatsApp"
+                 >
+                   <MessageCircle size={16} />
+                 </a>
+                 <a 
+                   href={`tel:${req.phone}`}
+                   onClick={(e) => e.stopPropagation()}
+                   className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-green-600 transition-colors"
+                   title="Call Customer"
+                 >
+                   <Phone size={16} />
+                 </a>
+                 {req.latitude && req.longitude && (
+                   <a 
+                     href={`https://www.google.com/maps?q=${req.latitude},${req.longitude}`}
+                     target="_blank"
+                     rel="noopener noreferrer"
+                     onClick={(e) => e.stopPropagation()}
+                     className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-orange-500 transition-colors"
+                     title="Open in Google Maps"
+                   >
+                     <Map size={16} />
+                   </a>
+                 )}
+                 <button onClick={(e) => { e.stopPropagation(); openModal(req); }} className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-blue-600 transition-colors">
                    {isReadOnly ? <Eye size={16} /> : <Edit2 size={16} />}
                  </button>
                  {!isReadOnly && (
-                   <button onClick={() => onDeleteRequest(req.id)} className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-red-600 transition-colors">
+                   <button onClick={(e) => { e.stopPropagation(); onDeleteRequest(req.id); }} className="p-2 hover:bg-white dark:hover:bg-neutral-800 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-red-600 transition-colors">
                      <Trash2 size={16} />
                    </button>
                  )}
@@ -766,9 +1068,61 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-3xl h-[500px] flex flex-col animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-neutral-800">
             <div className="p-4 border-b border-slate-100 dark:border-neutral-800 flex justify-between items-center bg-white dark:bg-neutral-900 rounded-t-xl">
               <h3 className="text-lg font-bold text-slate-800 dark:text-white">Pick Location</h3>
-              <button onClick={() => setIsMapOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"><X size={24} /></button>
+              <div className="flex items-center gap-2">
+                 {pickedLocation && (
+                   <button onClick={handleConfirmLocation} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors">
+                     Confirm
+                   </button>
+                 )}
+                 <button onClick={() => setIsMapOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"><X size={24} /></button>
+              </div>
             </div>
             
+            <div className="p-2 border-b border-slate-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex gap-2 relative z-10">
+                <div className="relative flex-1">
+                    <input 
+                      type="text" 
+                      placeholder="Search for a place..." 
+                      className="w-full bg-slate-100 dark:bg-neutral-800 border-none rounded-lg pl-4 pr-10 py-2 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white"
+                      value={mapSearchQuery}
+                      onChange={handleSearchInputChange}
+                      onKeyDown={(e) => e.key === 'Enter' && handleMapSearch()}
+                    />
+                    {mapSearchQuery && (
+                        <button 
+                            onClick={() => {
+                                setMapSearchQuery('');
+                                setSearchSuggestions([]);
+                                if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-neutral-300 p-1"
+                        >
+                            <X size={16} />
+                        </button>
+                    )}
+                    {searchSuggestions.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-lg shadow-lg max-h-60 overflow-y-auto z-50">
+                            {searchSuggestions.map((item, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => handleSelectSuggestion(item)}
+                                    className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-neutral-800 text-slate-700 dark:text-neutral-200 border-b border-slate-100 dark:border-neutral-800 last:border-0"
+                                >
+                                    <div className="font-medium">{highlightMatch(item.placeName, mapSearchQuery)}</div>
+                                    <div className="text-xs text-slate-500 dark:text-neutral-400 truncate">{highlightMatch(item.placeAddress, mapSearchQuery)}</div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                <button onClick={handleMapSearch} disabled={isSearching} className="bg-slate-200 dark:bg-neutral-700 text-slate-700 dark:text-neutral-200 px-4 py-2 rounded-lg text-sm font-medium min-w-[80px] flex justify-center items-center disabled:opacity-70">
+                   {isSearching ? <Loader2 size={18} className="animate-spin" /> : 'Search'}
+                </button>
+                <button onClick={handleCurrentLocation} className="bg-slate-200 dark:bg-neutral-700 text-slate-700 dark:text-neutral-200 px-3 py-2 rounded-lg text-sm font-medium" title="Use Current Location">
+                   <Crosshair size={20} />
+                </button>
+            </div>
+
             <div className="flex-1 relative bg-slate-100 dark:bg-neutral-800">
                <div id="mappls-map-picker" ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
                {!mapInstance.current && (
@@ -778,61 +1132,16 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                )}
             </div>
             
-            <div className="p-4 border-t border-slate-100 dark:border-neutral-800 flex justify-between items-center bg-slate-50 dark:bg-neutral-900/50 rounded-b-xl">
-              <div className="text-sm text-slate-600 dark:text-neutral-400">
-                 {pickedLocation ? `Selected: ${pickedLocation.lat.toFixed(5)}, ${pickedLocation.lng.toFixed(5)}` : 'Click on map to select location'}
-              </div>
-              <div className="flex gap-3">
-                 <button onClick={() => setIsMapOpen(false)} className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors">
-                   Cancel
-                 </button>
-                 <button onClick={handleConfirmLocation} disabled={!pickedLocation} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                   Confirm Location
-                 </button>
-              </div>
+            <div className="p-3 bg-white dark:bg-neutral-900 border-t border-slate-100 dark:border-neutral-800 rounded-b-xl z-10 relative">
+                <p className="text-sm text-slate-700 dark:text-neutral-300 truncate flex items-center gap-2">
+                    <MapPin size={16} className="text-blue-600 shrink-0" />
+                    {pickedAddress || (pickedLocation ? `${pickedLocation.lat.toFixed(6)}, ${pickedLocation.lng.toFixed(6)}` : 'No location selected')}
+                </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Date Filter Modal */}
-      {isDateFilterOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-sm animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-neutral-800">
-            <div className="p-4 border-b border-slate-100 dark:border-neutral-800 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white">Select Date Range</h3>
-              <button onClick={() => setIsDateFilterOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"><X size={24} /></button>
-            </div>
-            
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Start Date</label>
-                <input 
-                  type="date" 
-                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
-                  value={tempStartDate}
-                  max={tempEndDate || today}
-                  onChange={(e) => setTempStartDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">End Date</label>
-                <input 
-                  type="date" 
-                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
-                  value={tempEndDate}
-                  min={tempStartDate}
-                  max={today}
-                  onChange={(e) => setTempEndDate(e.target.value)}
-                />
-              </div>
-              <button onClick={() => { setStartDate(tempStartDate); setEndDate(tempEndDate); setIsDateFilterOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition-colors">
-                Apply Filter
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

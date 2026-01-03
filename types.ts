@@ -56,6 +56,8 @@ export interface DBServiceRequest {
   casing_type: string | null;
   casing10_depth: number;
   casing10_rate: number;
+  latitude: number | null;
+  longitude: number | null;
   items: any; // JSONB is hard to type strictly, but we parse it to ServiceItem[]
   last_edited_by: string | null;
   last_edited_at: string | null;
@@ -100,6 +102,8 @@ export interface ServiceRequest extends TrackedEntity {
   casingType?: string;
   casing10Depth?: number;
   casing10Rate?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Employee extends TrackedEntity {
