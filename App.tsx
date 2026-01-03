@@ -17,16 +17,19 @@ import {
   AlertCircle,
   Info,
   X,
-  PieChart
+  PieChart,
+  Plus
 } from 'lucide-react';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import type { Expense } from './components/Expenses';
 
 const ServiceRequests = React.lazy(() => import('./components/ServiceRequests').then(module => ({ default: module.ServiceRequests })));
+const CreateServiceRequest = React.lazy(() => import('./components/CreateServiceRequest').then(module => ({ default: module.CreateServiceRequest })));
 const Dashboard = React.lazy(() => import('./components/Dashboard').then(module => ({ default: module.Dashboard })));
 const Inventory = React.lazy(() => import('./components/Inventory').then(module => ({ default: module.Inventory })));
 const Employees = React.lazy(() => import('./components/Employees').then(module => ({ default: module.Employees })));
 const Expenses = React.lazy(() => import('./components/Expenses').then(module => ({ default: module.Expenses })));
+const CreateExpense = React.lazy(() => import('./components/CreateExpense').then(module => ({ default: module.CreateExpense })));
 import { Employee, Product, ServiceRequest, User, Vehicle } from './types';
 import {
   supabase,
@@ -39,9 +42,11 @@ import {
 enum View {
   DASHBOARD = 'Dashboard',
   REQUESTS = 'Service Requests',
-  INVENTORY = 'Inventory',
-  EMPLOYEES = 'Employees',
+  NEW_REQUEST = 'New Request',
   EXPENSES = 'Expenses',
+  NEW_EXPENSE = 'New Expense',
+  INVENTORY = 'Inventory',
+  EMPLOYEES = 'Employees',  
 }
 // --- Slick Splash Screen Component ---
 const SplashScreen = () => (
@@ -545,22 +550,6 @@ export default function App() {
     </button>
   );
 
-  const BottomNavItem = ({ view, icon: Icon, label }: { view: View; icon: React.ElementType; label: string }) => (
-    <button
-      onClick={() => { setCurrentView(view); window.scrollTo(0,0); }}
-      className={`flex flex-col items-center justify-center w-full h-full space-y-1 active:scale-95 transition-transform ${
-        currentView === view
-          ? 'text-blue-600 dark:text-blue-400'
-          : 'text-slate-400 dark:text-neutral-500 hover:text-slate-600 dark:hover:text-neutral-300'
-      }`}
-    >
-      <div className={`p-1 rounded-full ${currentView === view ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-        <Icon size={22} className={currentView === view ? 'fill-blue-600/20 dark:fill-blue-400/20' : ''} />
-      </div>
-      <span className="text-[10px] font-medium tracking-tight">{label}</span>
-    </button>
-  );
-
   return (
     <div 
       className="min-h-screen bg-slate-50 dark:bg-black flex transition-colors duration-200 overflow-x-hidden"
@@ -616,19 +605,29 @@ export default function App() {
           </div>
         </div>
 
-        {/* Sidebar Nav (Hidden on Mobile, replaced by Bottom Bar) */}
-        <nav className="flex-1 space-y-1 p-4 overflow-y-auto hidden lg:block">
+        {/* Sidebar Nav */}
+        <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
           <NavItem view={View.DASHBOARD} icon={LayoutDashboard} />
-          <NavItem view={View.REQUESTS} icon={Wrench} />
-          <NavItem view={View.INVENTORY} icon={Package} />
-          <NavItem view={View.EMPLOYEES} icon={UsersIcon} />
-          <NavItem view={View.EXPENSES} icon={PieChart} />
-        </nav>
+          
+          <div className="pt-4 pb-2">
+            <p className="px-4 text-xs font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider">Services</p>
+          </div>
+          
+          {!currentUser.isGuest && (
+             <NavItem view={View.NEW_REQUEST} icon={Plus} />
+          )}
+          {!currentUser.isGuest && (
+             <NavItem view={View.NEW_EXPENSE} icon={Plus} />
+          )}
 
-        {/* Mobile specific label for sidebar */}
-        <div className="lg:hidden p-4">
-           <div className="text-xs font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider mb-2 px-2">Settings</div>
-        </div>
+          <div className="pt-4 pb-2">
+            <p className="px-4 text-xs font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider">Manage</p>
+          </div>
+          <NavItem view={View.REQUESTS} icon={Wrench} />
+          <NavItem view={View.EXPENSES} icon={PieChart} />
+          <NavItem view={View.INVENTORY} icon={Package} />
+          <NavItem view={View.EMPLOYEES} icon={UsersIcon} />          
+        </nav>
 
         <div className="border-t border-slate-100 dark:border-neutral-800 p-4 space-y-2 mt-auto">
            <button onClick={toggleDarkMode} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 dark:text-neutral-400 hover:bg-slate-50 dark:hover:bg-neutral-800 hover:text-slate-700 dark:hover:text-neutral-200 rounded-lg transition-colors touch-manipulation">
@@ -646,7 +645,7 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden bg-slate-50 dark:bg-black w-full pb-24 lg:pb-0 lg:ml-72">
+      <main className="flex-1 flex flex-col min-h-screen overflow-hidden bg-slate-50 dark:bg-black w-full lg:ml-72">
         {/* Header */}
         <header className="bg-white dark:bg-neutral-900 border-b border-slate-200 dark:border-neutral-800 sticky top-0 z-30 transition-all duration-200">
           <div className="flex flex-col md:flex-row md:items-center justify-between px-4 lg:px-8 py-3 gap-3">
@@ -757,6 +756,18 @@ export default function App() {
               />
             </div>
           )}
+          {currentView === View.NEW_REQUEST && (
+            <div className="animate-in fade-in duration-500">
+              <CreateServiceRequest
+                products={products}
+                vehicles={vehicles}
+                currentUser={currentUser}
+                onAddRequest={handleAddRequest}
+                onCancel={() => setCurrentView(View.REQUESTS)}
+                showToast={showToast}
+              />
+            </div>
+          )}
           {currentView === View.INVENTORY && (
             <div className="animate-in fade-in duration-500">
               <Inventory 
@@ -796,18 +807,18 @@ export default function App() {
               />
             </div>
           )}
+          {currentView === View.NEW_EXPENSE && (
+             <div className="animate-in fade-in duration-500">
+               <CreateExpense 
+                 vehicles={vehicles}
+                 onAdd={handleAddExpense}
+                 onCancel={() => setCurrentView(View.EXPENSES)}
+               />
+             </div>
+          )}
           </React.Suspense>
         </div>
       </main>
-
-      {/* Bottom Navigation (Mobile Only) */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-neutral-900 border-t border-slate-200 dark:border-neutral-800 pb-safe flex justify-around items-center z-40 h-16 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] overflow-x-auto">
-        <BottomNavItem view={View.DASHBOARD} icon={LayoutDashboard} label="Home" />
-        <BottomNavItem view={View.REQUESTS} icon={Wrench} label="Requests" />
-        <BottomNavItem view={View.INVENTORY} icon={Package} label="Stock" />
-        <BottomNavItem view={View.EMPLOYEES} icon={UsersIcon} label="Team" />
-        <BottomNavItem view={View.EXPENSES} icon={PieChart} label="Expenses" />
-      </div>
     </div>
   );
 }
