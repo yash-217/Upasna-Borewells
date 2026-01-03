@@ -24,46 +24,67 @@ export const supabase = createClient(
 const safeDateToDB = (dateStr: string | undefined): string | null => {
   if (!dateStr || dateStr.trim() === '') return null;
   
-  // Try standard parsing first
-  let date = new Date(dateStr);
-  
-  // Handle DD/MM/YYYY format if standard parsing fails
-  if (isNaN(date.getTime()) && dateStr.includes('/')) {
-    const parts = dateStr.split('/');
-    if (parts.length === 3) {
-       // Swap to YYYY-MM-DD
-       const day = parts[0];
-       const month = parts[1];
-       const year = parts[2].split(',')[0].trim(); // Remove time part if present
-       date = new Date(`${year}-${month}-${day}`);
+  let date: Date | null = null;
+
+  // 1. Try manual DD/MM/YYYY parsing first to be strict
+  // Matches "23/01/2025" or "1/1/2024"
+  const dmyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1; // Months are 0-indexed
+    const year = parseInt(dmyMatch[3], 10);
+    date = new Date(year, month, day);
+  } else {
+    // 2. Fallback to standard parsing (YYYY-MM-DD)
+    const stdDate = new Date(dateStr);
+    if (!isNaN(stdDate.getTime())) {
+      date = stdDate;
     }
   }
 
-  if (isNaN(date.getTime())) return null;
+  // Check validity
+  if (!date || isNaN(date.getTime())) return null;
   
-  // Format as YYYY-MM-DD (ISO 8601)
-  return date.toISOString().split('T')[0];
+  // Format as YYYY-MM-DD (ISO 8601 Date only)
+  // Use user's local year/month/day but formatted as ISO string part
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  
+  return `${y}-${m}-${d}`;
 };
 
 // Safely parses a timestamp. Fixes "date/time field value out of range" error.
 const safeTimestampToDB = (dateStr: string | undefined): string | null => {
   if (!dateStr || dateStr.trim() === '') return null;
 
-  // 1. Try standard parsing
-  let date = new Date(dateStr);
+  let date: Date | null = null;
 
-  // 2. If standard parsing fails (e.g. "22/12/2025, 11:12:08 pm"), parse manually
-  if (isNaN(date.getTime())) {
-     // Check for DD/MM/YYYY format
-     if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
-        // We really just want "NOW" if it's a "Last Edited" timestamp that failed parsing.
-        // It's safer to generate a new timestamp than to try to parse a locale string perfectly.
-        return new Date().toISOString(); 
-     }
+  // 1. Try manual DD/MM/YYYY parsing first
+  if (dateStr.includes('/')) {
+    const dmyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (dmyMatch) {
+      const day = parseInt(dmyMatch[1], 10);
+      const month = parseInt(dmyMatch[2], 10) - 1;
+      const year = parseInt(dmyMatch[3], 10);
+      date = new Date(year, month, day);
+      
+      // If time part exists? "23/01/2025, 10:30 PM" - simplistic handling:
+      // If we just need the date valid, setting to 00:00:00 is often fine for metadata if parsing fails,
+      // but let's try to preserve it if possible or just default to current time if ambiguous.
+    }
   }
 
-  // 3. Final check: if it's still invalid, return current time
-  if (isNaN(date.getTime())) {
+  // 2. If manual failed, try standard
+  if (!date) {
+    const stdDate = new Date(dateStr);
+    if (!isNaN(stdDate.getTime())) {
+      date = stdDate;
+    }
+  }
+
+  // 3. Final check: if it's still invalid, return current time to ensure DB accepts the row
+  if (!date || isNaN(date.getTime())) {
     return new Date().toISOString();
   }
 
@@ -71,7 +92,7 @@ const safeTimestampToDB = (dateStr: string | undefined): string | null => {
 };
 
 // Safely parses a number. If invalid, returns 0.
-const safeNumber = (num: any): number => {
+const safeNumber = (num: unknown): number => {
   const parsed = Number(num);
   return isNaN(parsed) ? 0 : parsed;
 };
@@ -81,14 +102,14 @@ const safeNumber = (num: any): number => {
 export const mapProductFromDB = (data: DBProduct): Product => ({
   id: data.id,
   name: data.name,
-  category: data.category as any,
+  category: data.category as Product['category'],
   unitPrice: Number(data.unit_price) || 0,
   unit: data.unit,
   lastEditedBy: data.last_edited_by || undefined,
   lastEditedAt: data.last_edited_at || undefined
 });
 
-export const mapProductToDB = (p: Partial<Product>) => ({
+export const mapProductToDB = (p: Partial<Product>): Partial<DBProduct> => ({
   name: p.name,
   category: p.category,
   unit_price: safeNumber(p.unitPrice),
@@ -109,7 +130,7 @@ export const mapEmployeeFromDB = (data: DBEmployee): Employee => ({
   lastEditedAt: data.last_edited_at || undefined
 });
 
-export const mapEmployeeToDB = (e: Partial<Employee>) => ({
+export const mapEmployeeToDB = (e: Partial<Employee>): Partial<DBEmployee> => ({
   name: e.name,
   role: e.role,
   phone: e.phone,
@@ -145,7 +166,7 @@ export const mapRequestFromDB = (data: DBServiceRequest): ServiceRequest => ({
   lastEditedAt: data.last_edited_at || undefined
 });
 
-export const mapRequestToDB = (r: Partial<ServiceRequest>) => ({
+export const mapRequestToDB = (r: Partial<ServiceRequest>): Partial<DBServiceRequest> => ({
   customer_name: r.customerName,
   phone: r.phone,
   location: r.location,
