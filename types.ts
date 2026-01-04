@@ -29,7 +29,9 @@ export interface DBProduct {
 export interface DBEmployee {
   id: string;
   name: string;
-  role: string;
+  designation: string;
+  role: 'admin' | 'staff';
+  email: string | null;
   phone: string;
   salary: number;
   join_date: string;
@@ -61,12 +63,23 @@ export interface DBServiceRequest {
   items: any; // JSONB is hard to type strictly, but we parse it to ServiceItem[]
   last_edited_by: string | null;
   last_edited_at: string | null;
+  created_by: string | null;
+}
+
+export interface DBVehicle {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  last_edited_by: string | null;
+  last_edited_at: string | null;
 }
 
 // --- Application Types (Camel Case) ---
 export interface TrackedEntity {
   lastEditedBy?: string;
   lastEditedAt?: string;
+  createdBy?: string;
 }
 
 export interface Product extends TrackedEntity {
@@ -109,11 +122,20 @@ export interface ServiceRequest extends TrackedEntity {
 export interface Employee extends TrackedEntity {
   id: string;
   name: string;
-  role: string;
+  designation: string;
+  role: 'admin' | 'staff';
+  email?: string;
   phone: string;
   salary: number;
   joinDate: string;
   assignedVehicle?: string;
+}
+
+export interface Vehicle extends TrackedEntity {
+  id: string;
+  name: string;
+  type: string; // 'Drilling', 'Support', 'Service', 'Survey'
+  status: string; // 'Active', 'Maintenance', 'Retired'
 }
 
 export interface User {
@@ -121,4 +143,6 @@ export interface User {
   email: string;
   photoURL?: string;
   isGuest?: boolean;
+  role?: 'admin' | 'staff';
+  employeeId?: string;
 }

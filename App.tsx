@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Wrench,
@@ -16,29 +17,39 @@ import {
   AlertCircle,
   Info,
   X,
-  PieChart
+  PieChart,
+  Plus,
+  Home as HomeIcon
 } from 'lucide-react';
-import { ServiceRequests } from './components/ServiceRequests';
-import { Dashboard } from './components/Dashboard';
-import { Inventory } from './components/Inventory';
-import { Employees } from './components/Employees';
-import { Expenses, Expense } from './components/Expenses';
 import { ConfirmationModal } from './components/ConfirmationModal';
-import { Employee, Product, ServiceRequest, User } from './types';
-import { VEHICLES } from './constants';
+import type { Expense } from './components/Expenses';
+
+const ServiceRequests = React.lazy(() => import('./components/ServiceRequests').then(module => ({ default: module.ServiceRequests })));
+const CreateServiceRequest = React.lazy(() => import('./components/CreateServiceRequest').then(module => ({ default: module.CreateServiceRequest })));
+const Dashboard = React.lazy(() => import('./components/Dashboard').then(module => ({ default: module.Dashboard })));
+const Inventory = React.lazy(() => import('./components/Inventory').then(module => ({ default: module.Inventory })));
+const Employees = React.lazy(() => import('./components/Employees').then(module => ({ default: module.Employees })));
+const Expenses = React.lazy(() => import('./components/Expenses').then(module => ({ default: module.Expenses })));
+const CreateExpense = React.lazy(() => import('./components/CreateExpense').then(module => ({ default: module.CreateExpense })));
+const Home = React.lazy(() => import('./components/Home').then(module => ({ default: module.Home })));
+import { Employee, Product, ServiceRequest, User, Vehicle } from './types';
 import {
   supabase,
   mapProductFromDB, mapProductToDB,
   mapEmployeeFromDB, mapEmployeeToDB,
-  mapRequestFromDB, mapRequestToDB
+  mapRequestFromDB, mapRequestToDB,
+  mapVehicleFromDB
 } from './services/supabase';
 
 enum View {
+  HOME = 'Home',
   DASHBOARD = 'Dashboard',
   REQUESTS = 'Service Requests',
-  INVENTORY = 'Inventory',
-  EMPLOYEES = 'Employees',
+  NEW_REQUEST = 'New Request',
   EXPENSES = 'Expenses',
+  NEW_EXPENSE = 'New Expense',
+  INVENTORY = 'Inventory',
+  EMPLOYEES = 'Employees',  
 }
 // --- Slick Splash Screen Component ---
 const SplashScreen = () => (
@@ -71,11 +82,12 @@ const SplashScreen = () => (
 );
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<View>(View.DASHBOARD);
+  const queryClient = useQueryClient();
+  const [currentView, setCurrentView] = useState<View>(View.HOME);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [vehicleFilter, setVehicleFilter] = useState<string>('All Vehicles');
-  const [isLoading, setIsLoading] = useState(true);
+  
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isVisible: boolean }>({
     message: '',
     type: 'info',
@@ -85,12 +97,7 @@ export default function App() {
   
   // Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-
-  // App Data State
-  const [requests, setRequests] = useState<ServiceRequest[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // Confirmation Modal State
   const [confirmState, setConfirmState] = useState<{
@@ -119,77 +126,135 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Auth & Data Initialization
+  // Auth Initialization
   useEffect(() => {
+    const ensureEmployeeExists = async (user: any) => {
+      const email = user.email;
+      const name = user.user_metadata.full_name || 'Unknown';
+      
+      // Check if exists
+      const { data: existing } = await supabase
+        .from('employees')
+        .select('role')
+        .eq('email', email)
+        .single();
+
+      if (existing) {
+        return existing.role;
+      }
+
+      // Insert new
+      const newEmployee = {
+        name,
+        email,
+        designation: 'New Staff', // Default
+        role: 'staff',
+        phone: 'N/A',
+        salary: 0,
+        join_date: new Date().toISOString().split('T')[0],
+        assigned_vehicle: null
+      };
+
+      const { error } = await supabase.from('employees').insert(newEmployee);
+      if (error) {
+          console.error("Error creating employee record:", error);
+          return 'staff'; // Fallback
+      }
+      return 'staff';
+    };
+
     // 1. Check active session from LocalStorage (Persistence)
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
+        const role = await ensureEmployeeExists(session.user);
         setCurrentUser({
           name: session.user.user_metadata.full_name || 'User',
           email: session.user.email || '',
           photoURL: session.user.user_metadata.avatar_url,
-          isGuest: false
+          isGuest: false,
+          role: role as 'admin' | 'staff'
         });
-        // User is logged in, fetch data immediately
-        fetchData();
-      } else {
-        // No active session found, show login screen
-        setIsLoading(false);
       }
+      setIsAuthLoading(false);
     });
 
     // 2. Listen for auth changes (Sign In / Sign Out events)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
+        const role = await ensureEmployeeExists(session.user);
         setCurrentUser({
           name: session.user.user_metadata.full_name || 'User',
           email: session.user.email || '',
           photoURL: session.user.user_metadata.avatar_url,
-          isGuest: false
+          isGuest: false,
+          role: role as 'admin' | 'staff'
         });
-        // If data hasn't been fetched yet (e.g., fresh login), fetch it
-        if (requests.length === 0) {
-           fetchData();
-        }
+        setIsAuthLoading(false);
       } else if (!currentUser?.isGuest) {
         // Only clear if we aren't explicitly in guest mode
         setCurrentUser(null);
-        setRequests([]);
-        setProducts([]);
-        setEmployees([]);
-        setExpenses([]);
-        setIsLoading(false);
+        setIsAuthLoading(false);
+        queryClient.clear();
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [currentUser?.isGuest, queryClient]);
 
-  const fetchData = async () => {
-    // Keep loading true while fetching data to show splash screen
-    setIsLoading(true);
-    try {
-      const [reqRes, prodRes, empRes, expRes] = await Promise.all([
-        supabase.from('service_requests').select('*').order('date', { ascending: false }),
-        supabase.from('products').select('*').order('name'),
-        supabase.from('employees').select('*').order('name'),
-        supabase.from('expenses').select('*').order('date', { ascending: false })
-      ]);
+  // --- React Query Fetching ---
 
-      if (reqRes.data) setRequests(reqRes.data.map(mapRequestFromDB));
-      if (prodRes.data) setProducts(prodRes.data.map(mapProductFromDB));
-      if (empRes.data) setEmployees(empRes.data.map(mapEmployeeFromDB));
-      if (expRes.data) setExpenses(expRes.data.map((e: any) => ({ ...e, amount: Number(e.amount) })));
-      
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    } finally {
-      // Artificial delay to let the nice animation play at least briefly on fast connections
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 800);
-    }
-  };
+  const { data: requests = [], isLoading: isRequestsLoading } = useQuery({
+    queryKey: ['requests'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('service_requests').select('*').order('date', { ascending: false });
+      if (error) throw error;
+      return data.map(mapRequestFromDB);
+    },
+    enabled: !!currentUser,
+  });
+
+  const { data: products = [], isLoading: isProductsLoading } = useQuery({
+    queryKey: ['products'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('products').select('*').order('name');
+      if (error) throw error;
+      return data.map(mapProductFromDB);
+    },
+    enabled: !!currentUser,
+  });
+
+  const { data: employees = [], isLoading: isEmployeesLoading } = useQuery({
+    queryKey: ['employees'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('employees').select('*').order('name');
+      if (error) throw error;
+      return data.map(mapEmployeeFromDB);
+    },
+    enabled: !!currentUser,
+  });
+
+  const { data: expenses = [], isLoading: isExpensesLoading } = useQuery({
+    queryKey: ['expenses'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('expenses').select('*').order('date', { ascending: false });
+      if (error) throw error;
+      return data.map((e: any) => ({ ...e, amount: Number(e.amount) }));
+    },
+    enabled: !!currentUser,
+  });
+
+  const { data: vehicles = [], isLoading: isVehiclesLoading } = useQuery({
+    queryKey: ['vehicles'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('vehicles').select('*').order('name');
+      if (error) throw error;
+      return data.map(mapVehicleFromDB);
+    },
+    enabled: !!currentUser,
+  });
+
+  // Combined Loading State
+  const isLoading = isAuthLoading || (!!currentUser && (isRequestsLoading || isProductsLoading || isEmployeesLoading || isExpensesLoading || isVehiclesLoading));
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -219,28 +284,13 @@ export default function App() {
     }
   };
 
-  const handleGuestLogin = () => {
-    setCurrentUser({
-      name: 'Guest',
-      email: 'guest@upasna.local',
-      isGuest: true
-    });
-    fetchData();
-  };
-
   const handleLogout = async () => {
-    setIsLoading(true);
     if (currentUser?.isGuest) {
       setCurrentUser(null);
-      setRequests([]);
-      setProducts([]);
-      setEmployees([]);
-      setExpenses([]);
-      setIsLoading(false);
     } else {
       await supabase.auth.signOut();
-      // Auth state listener handles the rest
     }
+    queryClient.clear();
   };
 
   const toggleDarkMode = () => {
@@ -266,139 +316,186 @@ export default function App() {
     });
   };
 
-  // --- CRUD Operations ---
+  // --- CRUD Operations (Mutations) ---
 
   // Service Requests
-  const handleAddRequest = async (req: ServiceRequest) => {
-    const dbData = mapRequestToDB(req);
-    // Remove ID to let DB generate it
-    const { data, error } = await supabase.from('service_requests').insert(dbData).select().single();
-    if (error) {
+  const addRequestMutation = useMutation({
+    mutationFn: async (req: ServiceRequest) => {
+      const dbData = mapRequestToDB({
+        ...req,
+        createdBy: currentUser?.name // Add createdBy
+      });
+      const { data, error } = await supabase.from('service_requests').insert(dbData).select().single();
+      if (error) throw error;
+      return mapRequestFromDB(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] });
+    },
+    onError: (error) => {
       console.error("Error adding request:", error);
-      return;
+      showToast("Error adding request", "error");
     }
-    if (data) {
-      setRequests([mapRequestFromDB(data), ...requests]);
-    }
-  };
+  });
 
-  const handleUpdateRequest = async (updatedReq: ServiceRequest) => {
-    const dbData = mapRequestToDB(updatedReq);
-    const { error } = await supabase.from('service_requests').update(dbData).eq('id', updatedReq.id);
-    if (error) {
+  const updateRequestMutation = useMutation({
+    mutationFn: async (updatedReq: ServiceRequest) => {
+      const dbData = mapRequestToDB(updatedReq);
+      const { error } = await supabase.from('service_requests').update(dbData).eq('id', updatedReq.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] });
+    },
+    onError: (error) => {
       console.error("Error updating request:", error);
-      return;
+      showToast("Error updating request", "error");
     }
-    setRequests(requests.map(r => r.id === updatedReq.id ? updatedReq : r));
-  };
+  });
 
+  const deleteRequestMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('service_requests').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] });
+    },
+    onError: (error) => {
+      console.error("Error deleting request:", error);
+      showToast("Error deleting request", "error");
+    }
+  });
+
+  // Products
+  const addProductMutation = useMutation({
+    mutationFn: async (p: Product) => {
+      const dbData = mapProductToDB(p);
+      const { data, error } = await supabase.from('products').insert(dbData).select().single();
+      if (error) throw error;
+      return mapProductFromDB(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+    onError: (error) => console.error("Error adding product:", error)
+  });
+
+  const updateProductMutation = useMutation({
+    mutationFn: async (p: Product) => {
+      const dbData = mapProductToDB(p);
+      const { error } = await supabase.from('products').update(dbData).eq('id', p.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+    onError: (error) => console.error("Error updating product:", error)
+  });
+
+  const deleteProductMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('products').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+    onError: (error) => console.error("Error deleting product:", error)
+  });
+
+  // Employees
+  const addEmployeeMutation = useMutation({
+    mutationFn: async (e: Employee) => {
+      const dbData = mapEmployeeToDB(e);
+      const { data, error } = await supabase.from('employees').insert(dbData).select().single();
+      if (error) throw error;
+      return mapEmployeeFromDB(data);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
+    onError: (error) => console.error("Error adding employee:", error)
+  });
+
+  const updateEmployeeMutation = useMutation({
+    mutationFn: async (e: Employee) => {
+      const dbData = mapEmployeeToDB(e);
+      const { error } = await supabase.from('employees').update(dbData).eq('id', e.id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
+    onError: (error) => console.error("Error updating employee:", error)
+  });
+
+  const deleteEmployeeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('employees').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
+    onError: (error) => console.error("Error deleting employee:", error)
+  });
+
+  // Expenses
+  const addExpenseMutation = useMutation({
+    mutationFn: async (exp: Expense) => {
+      const { id, ...rest } = exp;
+      const dbData = {
+        ...rest,
+        last_edited_by: currentUser?.name,
+        last_edited_at: new Date().toISOString(),
+        created_by: currentUser?.name // Add created_by
+      };
+      const { data, error } = await supabase.from('expenses').insert(dbData).select().single();
+      if (error) throw error;
+      return { ...data, amount: Number(data.amount) };
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+    onError: (error) => console.error("Error adding expense:", error)
+  });
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('expenses').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+    onError: (error) => console.error("Error deleting expense:", error)
+  });
+
+  // --- Handler Adapters ---
+
+  const handleAddRequest = (req: ServiceRequest) => addRequestMutation.mutate(req);
+  const handleUpdateRequest = (req: ServiceRequest) => updateRequestMutation.mutate(req);
   const handleDeleteRequest = (id: string) => {
     triggerConfirm(
       "Delete Service Request",
       "Are you sure you want to delete this service request? This action cannot be undone.",
-      async () => {
-        const { error } = await supabase.from('service_requests').delete().eq('id', id);
-        if (!error) {
-          setRequests(requests.filter(r => r.id !== id));
-        }
-      }
+      () => deleteRequestMutation.mutate(id)
     );
   };
 
-  // Products
-  const handleAddProduct = async (p: Product) => {
-    const dbData = mapProductToDB(p);
-    const { data, error } = await supabase.from('products').insert(dbData).select().single();
-    if (error) {
-      console.error("Error adding product:", error);
-      return;
-    }
-    if (data) {
-      setProducts([...products, mapProductFromDB(data)]);
-    }
-  };
-
-  const handleUpdateProduct = async (p: Product) => {
-    const dbData = mapProductToDB(p);
-    const { error } = await supabase.from('products').update(dbData).eq('id', p.id);
-    if (!error) {
-      setProducts(products.map(pr => pr.id === p.id ? p : pr));
-    }
-  };
-
+  const handleAddProduct = (p: Product) => addProductMutation.mutate(p);
+  const handleUpdateProduct = (p: Product) => updateProductMutation.mutate(p);
   const handleDeleteProduct = (id: string) => {
     triggerConfirm(
       "Delete Product",
       "Are you sure you want to remove this product from inventory?",
-      async () => {
-        const { error } = await supabase.from('products').delete().eq('id', id);
-        if (!error) {
-          setProducts(products.filter(p => p.id !== id));
-        }
-      }
+      () => deleteProductMutation.mutate(id)
     );
   };
 
-  // Employees
-  const handleAddEmployee = async (e: Employee) => {
-    const dbData = mapEmployeeToDB(e);
-    const { data, error } = await supabase.from('employees').insert(dbData).select().single();
-    if (error) {
-      console.error("Error adding employee:", error);
-      return;
-    }
-    if (data) {
-      setEmployees([...employees, mapEmployeeFromDB(data)]);
-    }
-  };
-
-  const handleUpdateEmployee = async (e: Employee) => {
-    const dbData = mapEmployeeToDB(e);
-    const { error } = await supabase.from('employees').update(dbData).eq('id', e.id);
-    if (!error) {
-      setEmployees(employees.map(emp => emp.id === e.id ? e : emp));
-    }
-  };
-
+  const handleAddEmployee = (e: Employee) => addEmployeeMutation.mutate(e);
+  const handleUpdateEmployee = (e: Employee) => updateEmployeeMutation.mutate(e);
   const handleDeleteEmployee = (id: string) => {
     triggerConfirm(
       "Remove Employee",
       "Are you sure you want to remove this employee record?",
-      async () => {
-        const { error } = await supabase.from('employees').delete().eq('id', id);
-        if (!error) {
-          setEmployees(employees.filter(e => e.id !== id));
-        }
-      }
+      () => deleteEmployeeMutation.mutate(id)
     );
   };
 
-  // Expenses
-  const handleAddExpense = async (exp: Expense) => {
-    // Prepare DB object (remove ID to let DB generate it, map fields)
-    const { id, ...rest } = exp;
-    const dbData = {
-      ...rest,
-      last_edited_by: currentUser?.name,
-      last_edited_at: new Date().toISOString()
-    };
-    
-    const { data, error } = await supabase.from('expenses').insert(dbData).select().single();
-    if (error) {
-      console.error("Error adding expense:", error);
-      return;
-    }
-    if (data) {
-      setExpenses([{ ...data, amount: Number(data.amount) }, ...expenses]);
-    }
-  };
-
-  const handleDeleteExpense = async (id: string) => {
-    const { error } = await supabase.from('expenses').delete().eq('id', id);
-    if (!error) {
-      setExpenses(expenses.filter(e => e.id !== id));
-    }
-  };
+  const handleAddExpense = (exp: Expense) => addExpenseMutation.mutate(exp);
+  const handleDeleteExpense = (id: string) => deleteExpenseMutation.mutate(id);
 
   // Gesture Handlers
   const onTouchStart = (e: React.TouchEvent) => {
@@ -416,9 +513,6 @@ export default function App() {
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
 
-    // Only allow swipe to OPEN sidebar on desktop-like usage or if we decide to keep the drawer accessible
-    // With bottom nav, sidebar is mostly for settings/logout. 
-    // Let's keep the swipe to access those settings easily.
     if (isRightSwipe && !isSidebarOpen) {
       setSidebarOpen(true);
     }
@@ -466,14 +560,6 @@ export default function App() {
              </div>
            </div>
 
-           <button 
-             onClick={handleGuestLogin}
-             className="w-full flex items-center justify-center gap-2 text-slate-600 dark:text-neutral-400 hover:text-slate-800 dark:hover:text-white font-medium py-2 transition-colors text-sm"
-           >
-             <Eye size={16} />
-             Continue as Guest (Read Only)
-           </button>
-
            <p className="mt-6 text-xs text-slate-400 dark:text-neutral-500">Authorized personnel only.</p>
         </div>
       </div>
@@ -491,22 +577,6 @@ export default function App() {
     >
       <Icon size={20} />
       <span className="font-medium">{view}</span>
-    </button>
-  );
-
-  const BottomNavItem = ({ view, icon: Icon, label }: { view: View; icon: React.ElementType; label: string }) => (
-    <button
-      onClick={() => { setCurrentView(view); window.scrollTo(0,0); }}
-      className={`flex flex-col items-center justify-center w-full h-full space-y-1 active:scale-95 transition-transform ${
-        currentView === view
-          ? 'text-blue-600 dark:text-blue-400'
-          : 'text-slate-400 dark:text-neutral-500 hover:text-slate-600 dark:hover:text-neutral-300'
-      }`}
-    >
-      <div className={`p-1 rounded-full ${currentView === view ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-        <Icon size={22} className={currentView === view ? 'fill-blue-600/20 dark:fill-blue-400/20' : ''} />
-      </div>
-      <span className="text-[10px] font-medium tracking-tight">{label}</span>
     </button>
   );
 
@@ -565,19 +635,37 @@ export default function App() {
           </div>
         </div>
 
-        {/* Sidebar Nav (Hidden on Mobile, replaced by Bottom Bar) */}
-        <nav className="flex-1 space-y-1 p-4 overflow-y-auto hidden lg:block">
-          <NavItem view={View.DASHBOARD} icon={LayoutDashboard} />
-          <NavItem view={View.REQUESTS} icon={Wrench} />
-          <NavItem view={View.INVENTORY} icon={Package} />
-          <NavItem view={View.EMPLOYEES} icon={UsersIcon} />
-          <NavItem view={View.EXPENSES} icon={PieChart} />
-        </nav>
+        {/* Sidebar Nav */}
+        <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
+          <NavItem view={View.HOME} icon={HomeIcon} />
 
-        {/* Mobile specific label for sidebar */}
-        <div className="lg:hidden p-4">
-           <div className="text-xs font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider mb-2 px-2">Settings</div>
-        </div>
+          {currentUser.role !== 'staff' && (
+            <NavItem view={View.DASHBOARD} icon={LayoutDashboard} />
+          )}
+          
+          <div className="pt-4 pb-2">
+            <p className="px-4 text-xs font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider">Services</p>
+          </div>
+          
+          {!currentUser.isGuest && (
+             <NavItem view={View.NEW_REQUEST} icon={Plus} />
+          )}
+          {!currentUser.isGuest && (
+             <NavItem view={View.NEW_EXPENSE} icon={Plus} />
+          )}
+
+          <div className="pt-4 pb-2">
+            <p className="px-4 text-xs font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider">Manage</p>
+          </div>
+          <NavItem view={View.REQUESTS} icon={Wrench} />
+          <NavItem view={View.EXPENSES} icon={PieChart} />
+          {currentUser.role !== 'staff' && (
+            <>
+              <NavItem view={View.INVENTORY} icon={Package} />
+              <NavItem view={View.EMPLOYEES} icon={UsersIcon} />
+            </>
+          )}          
+        </nav>
 
         <div className="border-t border-slate-100 dark:border-neutral-800 p-4 space-y-2 mt-auto">
            <button onClick={toggleDarkMode} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 dark:text-neutral-400 hover:bg-slate-50 dark:hover:bg-neutral-800 hover:text-slate-700 dark:hover:text-neutral-200 rounded-lg transition-colors touch-manipulation">
@@ -595,7 +683,7 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden bg-slate-50 dark:bg-black w-full pb-24 lg:pb-0 lg:ml-72">
+      <main className="flex-1 flex flex-col min-h-screen overflow-hidden bg-slate-50 dark:bg-black w-full lg:ml-72">
         {/* Header */}
         <header className="bg-white dark:bg-neutral-900 border-b border-slate-200 dark:border-neutral-800 sticky top-0 z-30 transition-all duration-200">
           <div className="flex flex-col md:flex-row md:items-center justify-between px-4 lg:px-8 py-3 gap-3">
@@ -638,7 +726,7 @@ export default function App() {
                     className="bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-700 dark:text-neutral-300 w-48 cursor-pointer dark:bg-black focus:outline-none"
                   >
                     <option value="All Vehicles">All Vehicles</option>
-                    {VEHICLES.map(v => <option key={v} value={v}>{v}</option>)}
+                    {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
                   </select>
                </div>
 
@@ -671,7 +759,7 @@ export default function App() {
                     className="w-full bg-transparent border-none text-sm font-medium text-slate-700 dark:text-neutral-300 focus:outline-none"
                   >
                     <option value="All Vehicles">All Vehicles</option>
-                    {VEHICLES.map(v => <option key={v} value={v}>{v}</option>)}
+                    {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
                   </select>
                </div>
             </div>
@@ -679,6 +767,16 @@ export default function App() {
         </header>
 
         <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6 lg:p-8">
+          <React.Suspense fallback={
+            <div className="flex items-center justify-center h-full min-h-[50vh]">
+              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          }>
+          {currentView === View.HOME && (
+             <div className="animate-in fade-in duration-500">
+                <Home currentUser={currentUser} setCurrentView={setCurrentView} View={View} />
+             </div>
+          )}
           {currentView === View.DASHBOARD && (
             <div className="animate-in fade-in duration-500">
                <Dashboard requests={requests} employees={employees} expenses={expenses} vehicleFilter={vehicleFilter} />
@@ -689,6 +787,8 @@ export default function App() {
               <ServiceRequests 
                 requests={requests} 
                 products={products} 
+                vehicles={vehicles}
+                employees={employees}
                 currentUser={currentUser}
                 onAddRequest={handleAddRequest} 
                 onUpdateRequest={handleUpdateRequest}
@@ -696,6 +796,18 @@ export default function App() {
                 vehicleFilter={vehicleFilter}
                 isReadOnly={currentUser.isGuest}
                 onResetFilters={handleResetFilters}
+                showToast={showToast}
+              />
+            </div>
+          )}
+          {currentView === View.NEW_REQUEST && (
+            <div className="animate-in fade-in duration-500">
+              <CreateServiceRequest
+                products={products}
+                vehicles={vehicles}
+                currentUser={currentUser}
+                onAddRequest={handleAddRequest}
+                onCancel={() => setCurrentView(View.REQUESTS)}
                 showToast={showToast}
               />
             </div>
@@ -716,6 +828,7 @@ export default function App() {
             <div className="animate-in fade-in duration-500">
               <Employees 
                 employees={employees} 
+                vehicles={vehicles}
                 currentUser={currentUser}
                 onAddEmployee={handleAddEmployee} 
                 onUpdateEmployee={handleUpdateEmployee} 
@@ -729,6 +842,9 @@ export default function App() {
             <div className="animate-in fade-in duration-500">
               <Expenses 
                 expenses={expenses}
+                vehicles={vehicles}
+                employees={employees}
+                currentUser={currentUser}
                 onAdd={handleAddExpense}
                 onDelete={handleDeleteExpense}
                 isReadOnly={currentUser.isGuest}
@@ -737,17 +853,18 @@ export default function App() {
               />
             </div>
           )}
+          {currentView === View.NEW_EXPENSE && (
+             <div className="animate-in fade-in duration-500">
+               <CreateExpense 
+                 vehicles={vehicles}
+                 onAdd={handleAddExpense}
+                 onCancel={() => setCurrentView(View.EXPENSES)}
+               />
+             </div>
+          )}
+          </React.Suspense>
         </div>
       </main>
-
-      {/* Bottom Navigation (Mobile Only) */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-neutral-900 border-t border-slate-200 dark:border-neutral-800 pb-safe flex justify-around items-center z-40 h-16 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] overflow-x-auto">
-        <BottomNavItem view={View.DASHBOARD} icon={LayoutDashboard} label="Home" />
-        <BottomNavItem view={View.REQUESTS} icon={Wrench} label="Requests" />
-        <BottomNavItem view={View.INVENTORY} icon={Package} label="Stock" />
-        <BottomNavItem view={View.EMPLOYEES} icon={UsersIcon} label="Team" />
-        <BottomNavItem view={View.EXPENSES} icon={PieChart} label="Expenses" />
-      </div>
     </div>
   );
 }

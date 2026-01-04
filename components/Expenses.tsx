@@ -1,7 +1,7 @@
-import React, { useState, ChangeEvent } from 'react';
+import React, { useState, ChangeEvent, useEffect } from 'react';
 import Tesseract from 'tesseract.js';
-import { Trash2, Search, X, Plus, Truck, Upload, Calendar, DollarSign, FileText, Wrench, FileSpreadsheet } from 'lucide-react';
-import { VEHICLES } from '../constants';
+import { Trash2, Search, X, Plus, Truck, Upload, Calendar, DollarSign, FileText, Wrench, FileSpreadsheet, User as UserIcon } from 'lucide-react';
+import { Vehicle, Employee, User } from '../types';
 
 export interface Expense {
   id: string;
@@ -12,12 +12,16 @@ export interface Expense {
   vehicle?: string;
   last_edited_by?: string;
   last_edited_at?: string;
+  created_by?: string;
 }
 
 const EXPENSE_TYPES = ['Fuel', 'Maintenance', 'Salary', 'Miscellaneous'] as const;
 
 interface ExpensesProps {
   expenses: Expense[];
+  vehicles: Vehicle[];
+  employees: Employee[];
+  currentUser: User;
   onAdd: (expense: Expense) => void;
   onDelete: (id: string) => void;
   isReadOnly: boolean;
@@ -25,7 +29,7 @@ interface ExpensesProps {
   onResetFilters: () => void;
 }
 
-export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, isReadOnly, vehicleFilter, onResetFilters }) => {
+export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, employees, currentUser, onAdd, onDelete, isReadOnly, vehicleFilter, onResetFilters }) => {
   // Form State
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
@@ -43,6 +47,15 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
   const [endDate, setEndDate] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [employeeFilter, setEmployeeFilter] = useState<string>('All');
+
+  useEffect(() => {
+    if (currentUser.role === 'staff') {
+      setEmployeeFilter(currentUser.name);
+    } else {
+      setEmployeeFilter('All');
+    }
+  }, [currentUser]);
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -116,7 +129,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
       amount: parseFloat(amount),
       description,
       vehicle: vehicle || undefined,
-      last_edited_by: 'Current User',
+      last_edited_by: currentUser.name,
       last_edited_at: new Date().toISOString()
     };
 
@@ -175,8 +188,9 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
       const matchesType = filterType === 'All' || exp.type === filterType;
       const matchesSearch = exp.description.toLowerCase().includes(searchTerm.toLowerCase()) || exp.amount.toString().includes(searchTerm);
       const matchesDate = (!startDate || exp.date >= startDate) && (!endDate || exp.date <= endDate);
+      const matchesEmployee = employeeFilter === 'All' || exp.created_by === employeeFilter || (!exp.created_by && exp.last_edited_by === employeeFilter);
       
-      return matchesVehicle && matchesType && matchesSearch && matchesDate;
+      return matchesVehicle && matchesType && matchesSearch && matchesDate && matchesEmployee;
     })
     .sort((a, b) => {
       const dateA = new Date(a.date).getTime();
@@ -184,12 +198,15 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
       return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
 
-  const activeFiltersCount = (filterType !== 'All' ? 1 : 0) + (startDate ? 1 : 0) + (endDate ? 1 : 0);
+  const activeFiltersCount = (filterType !== 'All' ? 1 : 0) + (startDate ? 1 : 0) + (endDate ? 1 : 0) + (currentUser.role !== 'staff' && employeeFilter !== 'All' ? 1 : 0);
 
   const clearFilters = () => {
     setFilterType('All');
     setStartDate('');
     setEndDate('');
+    if (currentUser.role !== 'staff') {
+      setEmployeeFilter('All');
+    }
   };
 
   return (
@@ -210,6 +227,26 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
           </div>
 
           <div className="flex flex-wrap gap-2 items-center">
+              
+              {/* Employee Filter (Admin Only) */}
+              {currentUser.role !== 'staff' ? (
+                <div className="relative">
+                  <div className="absolute left-3 top-2.5 pointer-events-none text-slate-400">
+                    <UserIcon size={16} />
+                  </div>
+                  <select
+                    value={employeeFilter}
+                    onChange={(e) => setEmployeeFilter(e.target.value)}
+                    className="pl-10 pr-8 py-2 bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white appearance-none cursor-pointer min-w-[150px]"
+                  >
+                    <option value="All">All Employees</option>
+                    {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                  </select>
+                </div>
+              ) : (
+                 <div className="hidden"></div>
+              )}
+
               <div className="relative">
                 <button
                   onClick={() => setShowDateFilter(!showDateFilter)}
@@ -290,33 +327,6 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
                   <X size={20} />
                 </button>
               )}
-
-          {!isReadOnly && (
-            <div className="relative">
-              <input type="file" id="csv-upload" accept=".csv" className="hidden" onChange={handleCsvImport} />
-              <label 
-                htmlFor="csv-upload" 
-                className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer whitespace-nowrap"
-              >
-                <FileSpreadsheet size={18} />
-                <span className="hidden sm:inline">Import CSV</span>
-              </label>
-            </div>
-          )}
-
-          {!isReadOnly && (
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                showAddForm 
-                  ? 'bg-slate-100 dark:bg-neutral-800 text-slate-700 dark:text-neutral-300' 
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-            >
-              {showAddForm ? <X size={20} /> : <Plus size={20} />}
-              {showAddForm ? 'Cancel' : 'Add Expense'}
-            </button>
-          )}
         </div>
       </div>
       </div>
@@ -341,103 +351,6 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
             <X size={20} />
           </button>
         </div>
-      )}
-
-      {/* Add Expense Form */}
-      {!isReadOnly && showAddForm && (
-      <div className="bg-white dark:bg-neutral-900 p-6 rounded-xl border border-slate-200 dark:border-neutral-800 shadow-lg animate-in fade-in slide-in-from-top-4">
-        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
-          <Plus size={20} className="text-blue-600" />
-          New Expense Entry
-        </h3>
-        <form onSubmit={handleAddExpense} className="space-y-4">
-          
-          <div className="p-4 bg-slate-50 dark:bg-black rounded-lg border border-dashed border-slate-300 dark:border-neutral-700">
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-neutral-400 mb-2">
-              <Upload size={16} />
-              Upload Receipt (Auto-fill)
-            </label>
-            <input type="file" accept="image/*" onChange={handleFileUpload} disabled={isProcessing} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/30 dark:file:text-blue-400" />
-            {ocrStatus && <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 animate-pulse">{ocrStatus}</p>}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Date</label>
-              <input 
-                type="date" 
-                required 
-                value={date} 
-                onChange={e => setDate(e.target.value)} 
-                className="w-full px-3 py-2 bg-white dark:bg-black border border-slate-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Amount (₹)</label>
-              <input 
-                type="number" 
-                step="0.01" 
-                required 
-                value={amount} 
-                onChange={e => setAmount(e.target.value)} 
-                className="w-full px-3 py-2 bg-white dark:bg-black border border-slate-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Type</label>
-              <select 
-                value={type} 
-                onChange={e => setType(e.target.value as Expense['type'])}
-                className="w-full px-3 py-2 bg-white dark:bg-black border border-slate-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
-              >
-                {EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Vehicle (Optional)</label>
-              <select
-                value={vehicle}
-                onChange={e => setVehicle(e.target.value)}
-                className="w-full px-3 py-2 bg-white dark:bg-black border border-slate-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
-              >
-                <option value="">-- Select Vehicle --</option>
-                {VEHICLES.map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Description</label>
-            <input 
-              type="text" 
-              value={description} 
-              onChange={e => setDescription(e.target.value)} 
-              className="w-full px-3 py-2 bg-white dark:bg-black border border-slate-300 dark:border-neutral-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
-              placeholder="e.g., Diesel for Rig, Lunch, etc."
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button 
-              type="button" 
-              onClick={() => setShowAddForm(false)}
-              className="px-4 py-2 text-slate-600 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
-            <button 
-              type="submit" 
-              disabled={isProcessing} 
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              {isProcessing ? 'Processing...' : 'Save Expense'}
-            </button>
-          </div>
-        </form>
-      </div>
       )}
 
       {/* Expenses List */}
@@ -469,6 +382,11 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAdd, onDelete, i
                     </span>
                   )}
                 </div>
+                {expense.created_by && (
+                   <div className="text-xs text-slate-400 dark:text-neutral-500 mt-2">
+                     Created by: <span className="font-medium">{expense.created_by}</span>
+                   </div>
+                )}
               </div>
             </div>
             
