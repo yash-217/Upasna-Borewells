@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { Product, ServiceRequest, ServiceStatus, User, Vehicle } from '../types';
-import { Search, Filter, Edit2, Trash2, X, Truck, Eye, Calendar, Phone, MessageCircle, Map } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Product, ServiceRequest, ServiceStatus, User, Vehicle, Employee } from '../types';
+import { Search, Filter, Edit2, Trash2, X, Truck, Eye, Calendar, Phone, MessageCircle, Map, User as UserIcon } from 'lucide-react';
 import { ServiceRequestForm } from './ServiceRequestForm';
 
 interface ServiceRequestsProps {
   requests: ServiceRequest[];
   products: Product[];
   vehicles: Vehicle[];
+  employees: Employee[];
   currentUser: User;
   onAddRequest: (req: ServiceRequest) => void;
   onUpdateRequest: (req: ServiceRequest) => void;
@@ -18,7 +19,7 @@ interface ServiceRequestsProps {
 }
 
 export const ServiceRequests: React.FC<ServiceRequestsProps> = ({ 
-  requests, products, vehicles, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters, showToast
+  requests, products, vehicles, employees, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest, vehicleFilter, isReadOnly, onResetFilters, showToast
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<ServiceRequest | null>(null);
@@ -27,6 +28,17 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isDateFilterOpen, setIsDateFilterOpen] = useState(false);
+  
+  // Employee Filter: If staff, default to their name and lock it. If admin, default to 'All'.
+  const [employeeFilter, setEmployeeFilter] = useState<string>('All');
+
+  useEffect(() => {
+    if (currentUser.role === 'staff') {
+      setEmployeeFilter(currentUser.name);
+    } else {
+      setEmployeeFilter('All');
+    }
+  }, [currentUser]);
 
   const handleSubmit = (formData: ServiceRequest) => {
     const timestamp = new Date().toLocaleString();
@@ -61,11 +73,14 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     const matchesFilter = statusFilter === 'All' || req.status === statusFilter;
     const matchesVehicle = vehicleFilter === 'All Vehicles' || req.vehicle === vehicleFilter;
     
+    // Employee Filter Logic: using createdBy for ownership/assignment
+    const matchesEmployee = employeeFilter === 'All' || req.createdBy === employeeFilter || (!req.createdBy && req.lastEditedBy === employeeFilter);
+    
     let matchesDate = true;
     if (startDate && req.date < startDate) matchesDate = false;
     if (endDate && req.date > endDate) matchesDate = false;
 
-    return matchesSearch && matchesFilter && matchesVehicle && matchesDate;
+    return matchesSearch && matchesFilter && matchesVehicle && matchesDate && matchesEmployee;
   });
 
   // Sorting Logic
@@ -100,10 +115,13 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     setStartDate('');
     setEndDate('');
     setIsDateFilterOpen(false);
+    if (currentUser.role !== 'staff') {
+       setEmployeeFilter('All');
+    }
     if (onResetFilters) onResetFilters();
   };
 
-  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'All' || vehicleFilter !== 'All Vehicles' || startDate !== '' || endDate !== '';
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'All' || vehicleFilter !== 'All Vehicles' || startDate !== '' || endDate !== '' || (currentUser.role !== 'staff' && employeeFilter !== 'All');
 
   return (
     <div>
@@ -124,6 +142,26 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            
+            {/* Employee Filter (Admin Only) */}
+            {currentUser.role !== 'staff' ? (
+              <div className="relative">
+                <div className="absolute left-3 top-2.5 pointer-events-none text-slate-400">
+                  <UserIcon size={16} />
+                </div>
+                <select
+                  value={employeeFilter}
+                  onChange={(e) => setEmployeeFilter(e.target.value)}
+                  className="pl-10 pr-8 py-2 bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white appearance-none cursor-pointer min-w-[150px]"
+                >
+                  <option value="All">All Employees</option>
+                  {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                </select>
+              </div>
+            ) : (
+               <div className="hidden"></div>
+            )}
+
             <div className="relative">
               <button
                 onClick={() => setIsDateFilterOpen(!isDateFilterOpen)}
@@ -261,6 +299,11 @@ export const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                 </div>
               </div>
 
+              {req.createdBy && (
+                <div className="text-xs text-slate-400 dark:text-neutral-500 mb-1">
+                  Created by: <span className="font-medium text-slate-600 dark:text-neutral-300">{req.createdBy}</span>
+                </div>
+              )}
               {req.lastEditedBy && (
                 <div className="text-xs text-slate-300 dark:text-neutral-600 mb-2 italic">
                   Last updated by {req.lastEditedBy}

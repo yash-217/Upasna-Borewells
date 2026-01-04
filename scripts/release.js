@@ -26,16 +26,26 @@ console.log(`Updated package.json version from ${oldVersion} to ${newVersion}`);
 // 2. Update CHANGELOG.md
 let changelog = fs.readFileSync(changelogPath, 'utf-8');
 const date = new Date().toISOString().split('T')[0];
+const releaseNotes = args.slice(1).join(' ');
 
+const newHeader = `## [${newVersion}] - ${date}`;
+let newEntry = newHeader;
+if (releaseNotes) {
+  newEntry += `\n${releaseNotes}`;
+}
+
+const oldVersionHeader = `## [${oldVersion}]`;
 const unreleasedHeader = '## [Unreleased]';
-const newSection = `## [Unreleased]
 
-## [${newVersion}] - ${date}`;
-
-if (changelog.includes(unreleasedHeader)) {
+if (changelog.includes(oldVersionHeader)) {
+  changelog = changelog.replace(oldVersionHeader, `${newEntry}\n\n${oldVersionHeader}`);
+  fs.writeFileSync(changelogPath, changelog);
+  console.log(`Prepended new release notes for version ${newVersion} to CHANGELOG.md`);
+} else if (changelog.includes(unreleasedHeader)) {
+  const newSection = `## [Unreleased]\n\n${newEntry}`;
   changelog = changelog.replace(unreleasedHeader, newSection);
   fs.writeFileSync(changelogPath, changelog);
-  console.log(`Updated CHANGELOG.md for version ${newVersion}`);
+  console.log(`Updated CHANGELOG.md for version ${newVersion} under Unreleased header`);
 } else {
-  console.warn('Could not find "## [Unreleased]" header in CHANGELOG.md');
+  console.warn('Could not find previous version header or "## [Unreleased]" header in CHANGELOG.md');
 }

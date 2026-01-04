@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Employee, User, Vehicle } from '../types';
-import { UserPlus, X, Phone, Calendar, DollarSign, Truck, Edit2, Trash2 } from 'lucide-react';
+import { UserPlus, X, Phone, Calendar, DollarSign, Truck, Edit2, Trash2, Mail } from 'lucide-react';
 
 interface EmployeesProps {
   employees: Employee[];
@@ -19,7 +19,7 @@ export const Employees: React.FC<EmployeesProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [formData, setFormData] = useState<Partial<Employee>>({
-    name: '', role: '', phone: '', salary: 0, joinDate: new Date().toISOString().split('T')[0], assignedVehicle: vehicles.length > 0 ? vehicles[0].name : ''
+    name: '', designation: '', role: 'staff', email: '', phone: '', salary: 0, joinDate: new Date().toISOString().split('T')[0], assignedVehicle: vehicles.length > 0 ? vehicles[0].name : ''
   });
 
   const openModal = (emp?: Employee) => {
@@ -31,7 +31,7 @@ export const Employees: React.FC<EmployeesProps> = ({
     } else {
       setEditingEmployee(null);
       setFormData({ 
-        name: '', role: '', phone: '', salary: 0, 
+        name: '', designation: '', role: 'staff', email: '', phone: '', salary: 0, 
         joinDate: new Date().toISOString().split('T')[0], 
         assignedVehicle: vehicles.length > 0 ? vehicles[0].name : '' 
       });
@@ -107,9 +107,20 @@ export const Employees: React.FC<EmployeesProps> = ({
                   </div>
                 )}
               </div>
-              <p className="text-blue-600 dark:text-blue-400 font-medium text-sm mb-3">{emp.role}</p>
+              <p className="text-blue-600 dark:text-blue-400 font-medium text-sm mb-3">
+                {emp.designation}
+                <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${emp.role === 'admin' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'}`}>
+                  {emp.role.charAt(0).toUpperCase() + emp.role.slice(1)}
+                </span>
+              </p>
               
               <div className="space-y-1.5">
+                {emp.email && (
+                  <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
+                    <Mail size={14} className="mr-2 opacity-70" />
+                    {emp.email}
+                  </div>
+                )}
                 <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
                   <Phone size={14} className="mr-2 opacity-70" />
                   {emp.phone}
@@ -166,11 +177,26 @@ export const Employees: React.FC<EmployeesProps> = ({
                   <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
                     value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                 </div>
+
+                <div>
+                   <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Email (for Login)</label>
+                   <input disabled={isReadOnly} type="email" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                     value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
+                </div>
                 
                 <div>
-                   <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Role / Designation</label>
+                   <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Designation</label>
                    <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                     value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} />
+                     value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})} />
+                </div>
+
+                <div>
+                   <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Access Role</label>
+                   <select disabled={isReadOnly} className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                      value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as 'admin' | 'staff'})}>
+                      <option value="staff">Staff</option>
+                      <option value="admin">Admin</option>
+                   </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

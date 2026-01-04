@@ -121,7 +121,9 @@ export const mapProductToDB = (p: Partial<Product>): Partial<DBProduct> => ({
 export const mapEmployeeFromDB = (data: DBEmployee): Employee => ({
   id: data.id,
   name: data.name,
+  designation: data.designation,
   role: data.role,
+  email: data.email || undefined,
   phone: data.phone,
   salary: Number(data.salary) || 0,
   joinDate: data.join_date,
@@ -132,7 +134,9 @@ export const mapEmployeeFromDB = (data: DBEmployee): Employee => ({
 
 export const mapEmployeeToDB = (e: Partial<Employee>): Partial<DBEmployee> => ({
   name: e.name,
+  designation: e.designation,
   role: e.role,
+  email: e.email || null,
   phone: e.phone,
   salary: safeNumber(e.salary),
   join_date: safeDateToDB(e.joinDate),
@@ -163,7 +167,8 @@ export const mapRequestFromDB = (data: DBServiceRequest): ServiceRequest => ({
   longitude: data.longitude !== null ? Number(data.longitude) : undefined,
   items: Array.isArray(data.items) ? data.items : [], 
   lastEditedBy: data.last_edited_by || undefined,
-  lastEditedAt: data.last_edited_at || undefined
+  lastEditedAt: data.last_edited_at || undefined,
+  createdBy: data.created_by || undefined
 });
 
 export const mapRequestToDB = (r: Partial<ServiceRequest>): Partial<DBServiceRequest> => ({
@@ -187,7 +192,8 @@ export const mapRequestToDB = (r: Partial<ServiceRequest>): Partial<DBServiceReq
   longitude: r.longitude ?? null,
   items: r.items,
   last_edited_by: r.lastEditedBy,
-  last_edited_at: safeTimestampToDB(r.lastEditedAt)
+  last_edited_at: safeTimestampToDB(r.lastEditedAt),
+  created_by: r.createdBy
 });
 
 export const mapVehicleFromDB = (data: DBVehicle): Vehicle => ({

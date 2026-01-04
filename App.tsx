@@ -18,7 +18,8 @@ import {
   Info,
   X,
   PieChart,
-  Plus
+  Plus,
+  Home as HomeIcon
 } from 'lucide-react';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import type { Expense } from './components/Expenses';
@@ -30,6 +31,7 @@ const Inventory = React.lazy(() => import('./components/Inventory').then(module 
 const Employees = React.lazy(() => import('./components/Employees').then(module => ({ default: module.Employees })));
 const Expenses = React.lazy(() => import('./components/Expenses').then(module => ({ default: module.Expenses })));
 const CreateExpense = React.lazy(() => import('./components/CreateExpense').then(module => ({ default: module.CreateExpense })));
+const Home = React.lazy(() => import('./components/Home').then(module => ({ default: module.Home })));
 import { Employee, Product, ServiceRequest, User, Vehicle } from './types';
 import {
   supabase,
@@ -40,6 +42,7 @@ import {
 } from './services/supabase';
 
 enum View {
+  HOME = 'Home',
   DASHBOARD = 'Dashboard',
   REQUESTS = 'Service Requests',
   NEW_REQUEST = 'New Request',
@@ -80,7 +83,7 @@ const SplashScreen = () => (
 
 export default function App() {
   const queryClient = useQueryClient();
-  const [currentView, setCurrentView] = useState<View>(View.DASHBOARD);
+  const [currentView, setCurrentView] = useState<View>(View.HOME);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [vehicleFilter, setVehicleFilter] = useState<string>('All Vehicles');
@@ -125,27 +128,66 @@ export default function App() {
 
   // Auth Initialization
   useEffect(() => {
+    const ensureEmployeeExists = async (user: any) => {
+      const email = user.email;
+      const name = user.user_metadata.full_name || 'Unknown';
+      
+      // Check if exists
+      const { data: existing } = await supabase
+        .from('employees')
+        .select('role')
+        .eq('email', email)
+        .single();
+
+      if (existing) {
+        return existing.role;
+      }
+
+      // Insert new
+      const newEmployee = {
+        name,
+        email,
+        designation: 'New Staff', // Default
+        role: 'staff',
+        phone: 'N/A',
+        salary: 0,
+        join_date: new Date().toISOString().split('T')[0],
+        assigned_vehicle: null
+      };
+
+      const { error } = await supabase.from('employees').insert(newEmployee);
+      if (error) {
+          console.error("Error creating employee record:", error);
+          return 'staff'; // Fallback
+      }
+      return 'staff';
+    };
+
     // 1. Check active session from LocalStorage (Persistence)
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
+        const role = await ensureEmployeeExists(session.user);
         setCurrentUser({
           name: session.user.user_metadata.full_name || 'User',
           email: session.user.email || '',
           photoURL: session.user.user_metadata.avatar_url,
-          isGuest: false
+          isGuest: false,
+          role: role as 'admin' | 'staff'
         });
       }
       setIsAuthLoading(false);
     });
 
     // 2. Listen for auth changes (Sign In / Sign Out events)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
+        const role = await ensureEmployeeExists(session.user);
         setCurrentUser({
           name: session.user.user_metadata.full_name || 'User',
           email: session.user.email || '',
           photoURL: session.user.user_metadata.avatar_url,
-          isGuest: false
+          isGuest: false,
+          role: role as 'admin' | 'staff'
         });
         setIsAuthLoading(false);
       } else if (!currentUser?.isGuest) {
@@ -242,14 +284,6 @@ export default function App() {
     }
   };
 
-  const handleGuestLogin = () => {
-    setCurrentUser({
-      name: 'Guest',
-      email: 'guest@upasna.local',
-      isGuest: true
-    });
-  };
-
   const handleLogout = async () => {
     if (currentUser?.isGuest) {
       setCurrentUser(null);
@@ -287,7 +321,10 @@ export default function App() {
   // Service Requests
   const addRequestMutation = useMutation({
     mutationFn: async (req: ServiceRequest) => {
-      const dbData = mapRequestToDB(req);
+      const dbData = mapRequestToDB({
+        ...req,
+        createdBy: currentUser?.name // Add createdBy
+      });
       const { data, error } = await supabase.from('service_requests').insert(dbData).select().single();
       if (error) throw error;
       return mapRequestFromDB(data);
@@ -405,7 +442,8 @@ export default function App() {
       const dbData = {
         ...rest,
         last_edited_by: currentUser?.name,
-        last_edited_at: new Date().toISOString()
+        last_edited_at: new Date().toISOString(),
+        created_by: currentUser?.name // Add created_by
       };
       const { data, error } = await supabase.from('expenses').insert(dbData).select().single();
       if (error) throw error;
@@ -522,14 +560,6 @@ export default function App() {
              </div>
            </div>
 
-           <button 
-             onClick={handleGuestLogin}
-             className="w-full flex items-center justify-center gap-2 text-slate-600 dark:text-neutral-400 hover:text-slate-800 dark:hover:text-white font-medium py-2 transition-colors text-sm"
-           >
-             <Eye size={16} />
-             Continue as Guest (Read Only)
-           </button>
-
            <p className="mt-6 text-xs text-slate-400 dark:text-neutral-500">Authorized personnel only.</p>
         </div>
       </div>
@@ -607,7 +637,11 @@ export default function App() {
 
         {/* Sidebar Nav */}
         <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
-          <NavItem view={View.DASHBOARD} icon={LayoutDashboard} />
+          <NavItem view={View.HOME} icon={HomeIcon} />
+
+          {currentUser.role !== 'staff' && (
+            <NavItem view={View.DASHBOARD} icon={LayoutDashboard} />
+          )}
           
           <div className="pt-4 pb-2">
             <p className="px-4 text-xs font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider">Services</p>
@@ -625,8 +659,12 @@ export default function App() {
           </div>
           <NavItem view={View.REQUESTS} icon={Wrench} />
           <NavItem view={View.EXPENSES} icon={PieChart} />
-          <NavItem view={View.INVENTORY} icon={Package} />
-          <NavItem view={View.EMPLOYEES} icon={UsersIcon} />          
+          {currentUser.role !== 'staff' && (
+            <>
+              <NavItem view={View.INVENTORY} icon={Package} />
+              <NavItem view={View.EMPLOYEES} icon={UsersIcon} />
+            </>
+          )}          
         </nav>
 
         <div className="border-t border-slate-100 dark:border-neutral-800 p-4 space-y-2 mt-auto">
@@ -734,6 +772,11 @@ export default function App() {
               <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             </div>
           }>
+          {currentView === View.HOME && (
+             <div className="animate-in fade-in duration-500">
+                <Home currentUser={currentUser} setCurrentView={setCurrentView} View={View} />
+             </div>
+          )}
           {currentView === View.DASHBOARD && (
             <div className="animate-in fade-in duration-500">
                <Dashboard requests={requests} employees={employees} expenses={expenses} vehicleFilter={vehicleFilter} />
@@ -745,6 +788,7 @@ export default function App() {
                 requests={requests} 
                 products={products} 
                 vehicles={vehicles}
+                employees={employees}
                 currentUser={currentUser}
                 onAddRequest={handleAddRequest} 
                 onUpdateRequest={handleUpdateRequest}
@@ -799,6 +843,8 @@ export default function App() {
               <Expenses 
                 expenses={expenses}
                 vehicles={vehicles}
+                employees={employees}
+                currentUser={currentUser}
                 onAdd={handleAddExpense}
                 onDelete={handleDeleteExpense}
                 isReadOnly={currentUser.isGuest}

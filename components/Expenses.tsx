@@ -1,7 +1,7 @@
-import React, { useState, ChangeEvent } from 'react';
+import React, { useState, ChangeEvent, useEffect } from 'react';
 import Tesseract from 'tesseract.js';
-import { Trash2, Search, X, Plus, Truck, Upload, Calendar, DollarSign, FileText, Wrench, FileSpreadsheet } from 'lucide-react';
-import { Vehicle } from '../types';
+import { Trash2, Search, X, Plus, Truck, Upload, Calendar, DollarSign, FileText, Wrench, FileSpreadsheet, User as UserIcon } from 'lucide-react';
+import { Vehicle, Employee, User } from '../types';
 
 export interface Expense {
   id: string;
@@ -12,6 +12,7 @@ export interface Expense {
   vehicle?: string;
   last_edited_by?: string;
   last_edited_at?: string;
+  created_by?: string;
 }
 
 const EXPENSE_TYPES = ['Fuel', 'Maintenance', 'Salary', 'Miscellaneous'] as const;
@@ -19,6 +20,8 @@ const EXPENSE_TYPES = ['Fuel', 'Maintenance', 'Salary', 'Miscellaneous'] as cons
 interface ExpensesProps {
   expenses: Expense[];
   vehicles: Vehicle[];
+  employees: Employee[];
+  currentUser: User;
   onAdd: (expense: Expense) => void;
   onDelete: (id: string) => void;
   isReadOnly: boolean;
@@ -26,7 +29,7 @@ interface ExpensesProps {
   onResetFilters: () => void;
 }
 
-export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, onAdd, onDelete, isReadOnly, vehicleFilter, onResetFilters }) => {
+export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, employees, currentUser, onAdd, onDelete, isReadOnly, vehicleFilter, onResetFilters }) => {
   // Form State
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
@@ -44,6 +47,15 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, onAdd, o
   const [endDate, setEndDate] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [employeeFilter, setEmployeeFilter] = useState<string>('All');
+
+  useEffect(() => {
+    if (currentUser.role === 'staff') {
+      setEmployeeFilter(currentUser.name);
+    } else {
+      setEmployeeFilter('All');
+    }
+  }, [currentUser]);
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -117,7 +129,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, onAdd, o
       amount: parseFloat(amount),
       description,
       vehicle: vehicle || undefined,
-      last_edited_by: 'Current User',
+      last_edited_by: currentUser.name,
       last_edited_at: new Date().toISOString()
     };
 
@@ -176,8 +188,9 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, onAdd, o
       const matchesType = filterType === 'All' || exp.type === filterType;
       const matchesSearch = exp.description.toLowerCase().includes(searchTerm.toLowerCase()) || exp.amount.toString().includes(searchTerm);
       const matchesDate = (!startDate || exp.date >= startDate) && (!endDate || exp.date <= endDate);
+      const matchesEmployee = employeeFilter === 'All' || exp.created_by === employeeFilter || (!exp.created_by && exp.last_edited_by === employeeFilter);
       
-      return matchesVehicle && matchesType && matchesSearch && matchesDate;
+      return matchesVehicle && matchesType && matchesSearch && matchesDate && matchesEmployee;
     })
     .sort((a, b) => {
       const dateA = new Date(a.date).getTime();
@@ -185,12 +198,15 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, onAdd, o
       return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
 
-  const activeFiltersCount = (filterType !== 'All' ? 1 : 0) + (startDate ? 1 : 0) + (endDate ? 1 : 0);
+  const activeFiltersCount = (filterType !== 'All' ? 1 : 0) + (startDate ? 1 : 0) + (endDate ? 1 : 0) + (currentUser.role !== 'staff' && employeeFilter !== 'All' ? 1 : 0);
 
   const clearFilters = () => {
     setFilterType('All');
     setStartDate('');
     setEndDate('');
+    if (currentUser.role !== 'staff') {
+      setEmployeeFilter('All');
+    }
   };
 
   return (
@@ -211,6 +227,26 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, onAdd, o
           </div>
 
           <div className="flex flex-wrap gap-2 items-center">
+              
+              {/* Employee Filter (Admin Only) */}
+              {currentUser.role !== 'staff' ? (
+                <div className="relative">
+                  <div className="absolute left-3 top-2.5 pointer-events-none text-slate-400">
+                    <UserIcon size={16} />
+                  </div>
+                  <select
+                    value={employeeFilter}
+                    onChange={(e) => setEmployeeFilter(e.target.value)}
+                    className="pl-10 pr-8 py-2 bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white appearance-none cursor-pointer min-w-[150px]"
+                  >
+                    <option value="All">All Employees</option>
+                    {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                  </select>
+                </div>
+              ) : (
+                 <div className="hidden"></div>
+              )}
+
               <div className="relative">
                 <button
                   onClick={() => setShowDateFilter(!showDateFilter)}
@@ -346,6 +382,11 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, onAdd, o
                     </span>
                   )}
                 </div>
+                {expense.created_by && (
+                   <div className="text-xs text-slate-400 dark:text-neutral-500 mt-2">
+                     Created by: <span className="font-medium">{expense.created_by}</span>
+                   </div>
+                )}
               </div>
             </div>
             

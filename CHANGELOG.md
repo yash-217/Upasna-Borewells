@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-01-04
+
 ## [0.1.1] - 2026-01-03
 - Separated Service Request creation form into a dedicated page accessible via sidebar.
 - Separated Expense creation form into a dedicated page accessible via sidebar.
