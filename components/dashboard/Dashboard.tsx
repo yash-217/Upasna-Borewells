@@ -1,6 +1,6 @@
 import React from 'react';
-import { ServiceRequest, ServiceStatus, Employee } from '../types';
-import { Expense } from './Expenses';
+import { ServiceRequest, ServiceStatus, Employee } from '../../types';
+import { Expense } from '../expenses/Expenses';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { DollarSign, TrendingUp, Users, Activity, AlertCircle, TrendingDown } from 'lucide-react';
 

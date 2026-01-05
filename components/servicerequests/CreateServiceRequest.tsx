@@ -1,5 +1,5 @@
 import React from 'react';
-import { Product, ServiceRequest, User, Vehicle } from '../types';
+import { Product, ServiceRequest, User, Vehicle } from '../../types';
 import { ServiceRequestForm } from './ServiceRequestForm';
 import { Plus } from 'lucide-react';
 

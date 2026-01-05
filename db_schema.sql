@@ -46,7 +46,8 @@ create table public.service_requests (
   drilling_rate numeric default 0,
   items jsonb default '[]'::jsonb, -- Stores array of {productId, quantity, price}
   last_edited_by text,
-  last_edited_at text
+  last_edited_at text,
+  created_by text
 );
 
 -- 4. EXPENSES TABLE
@@ -58,7 +59,8 @@ create table public.expenses (
   amount numeric not null,
   description text,
   last_edited_by text,
-  last_edited_at text
+  last_edited_at text,
+  created_by text
 );
 
 -- 5. Vehicles TABLE
@@ -71,29 +73,111 @@ CREATE TABLE vehicles (
   last_edited_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
+-- ==========================================
+-- AUTOMATION (FUNCTIONS & TRIGGERS)
+-- ==========================================
+
+-- 1. Helper Function: IS_ADMIN()
+-- Security Definer to bypass RLS recursion when checking admin status
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.employees
+    WHERE email = (auth.jwt() ->> 'email')
+    AND role = 'admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 2. Trigger: Handle New User
+-- Ensures an entry in public.employees exists for every auth user.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.employees (email, name, designation, role, join_date, phone)
+  VALUES (
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', 'New User'),
+    'New Staff',
+    'staff',
+    CURRENT_DATE,
+    COALESCE(NEW.raw_user_meta_data->>'phone', 'N/A')
+  )
+  ON CONFLICT (email) DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+
+-- ==========================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
--- Goal: Authenticated users can do everything. Anon users can do nothing (except login).
+-- ==========================================
 
 alter table public.products enable row level security;
 alter table public.employees enable row level security;
 alter table public.service_requests enable row level security;
 alter table public.expenses enable row level security;
--- Products Policies
+alter table public.vehicles enable row level security;
+
+-- 1. PRODUCTS (Inventory)
+-- Read: All
+-- Write: Admin Only
 CREATE POLICY "Enable read access for all users" ON public.products FOR SELECT USING (true);
-CREATE POLICY "Enable write access for authenticated users" ON public.products FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Enable full access for admins" ON public.products
+  FOR ALL USING (public.is_admin());
 
--- Employees Policies
+-- 2. EMPLOYEES
+-- Read: All
+-- Write: Admin (Everything), User (Self Update only)
 CREATE POLICY "Enable read access for all users" ON public.employees FOR SELECT USING (true);
-CREATE POLICY "Enable write access for authenticated users" ON public.employees FOR ALL USING (auth.role() = 'authenticated');
 
--- Service Requests Policies
-CREATE POLICY "Enable read access for all users" ON public.service_requests FOR SELECT USING (true);
-CREATE POLICY "Enable write access for authenticated users" ON public.service_requests FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Enable full access for admins" ON public.employees
+  FOR ALL USING (public.is_admin());
 
--- Expenses Policies
-CREATE POLICY "Enable read access for all users" ON public.expenses FOR SELECT USING (true);
-CREATE POLICY "Enable write access for authenticated users" ON public.expenses FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Enable self update" ON public.employees
+  FOR UPDATE USING (
+    email = (select auth.jwt() ->> 'email')
+  );
 
--- Vehicles Policies
+-- 3. VEHICLES
+-- Read: All
+-- Write: Admin Only
 CREATE POLICY "Enable read access for all users" ON public.vehicles FOR SELECT USING (true);
-CREATE POLICY "Enable write access for authenticated users" ON public.vehicles FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Enable full access for admins" ON public.vehicles
+  FOR ALL USING (public.is_admin());
+
+-- 4. SERVICE REQUESTS
+-- Read: All
+-- Write: Admin (All), Staff (Insert & Update, No Delete)
+CREATE POLICY "Enable read access for all users" ON public.service_requests FOR SELECT USING (true);
+
+CREATE POLICY "Enable full access for admins" ON public.service_requests
+  FOR ALL USING (public.is_admin());
+
+CREATE POLICY "Enable insert for staff" ON public.service_requests
+  FOR INSERT WITH CHECK ( auth.role() = 'authenticated' );
+
+CREATE POLICY "Enable update for staff" ON public.service_requests
+  FOR UPDATE USING ( auth.role() = 'authenticated' );
+
+-- 5. EXPENSES
+-- Read: All
+-- Write: Admin (All), Staff (Insert & Update, No Delete)
+CREATE POLICY "Enable read access for all users" ON public.expenses FOR SELECT USING (true);
+
+CREATE POLICY "Enable full access for admins" ON public.expenses
+  FOR ALL USING (public.is_admin());
+
+CREATE POLICY "Enable insert for staff" ON public.expenses
+  FOR INSERT WITH CHECK ( auth.role() = 'authenticated' );
+
+CREATE POLICY "Enable update for staff" ON public.expenses
+  FOR UPDATE USING ( auth.role() = 'authenticated' );
