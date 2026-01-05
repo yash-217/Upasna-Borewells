@@ -170,8 +170,12 @@ export enum View {
 
   NEW_EXPENSE = 'New Expense',
 
-  INVENTORY = 'Inventory',
+    INVENTORY = 'Inventory',
 
-  EMPLOYEES = 'Employees',  
+    EMPLOYEES = 'Employees',
 
-}
+    PROFILE = 'Profile',  
+
+  }
+
+  

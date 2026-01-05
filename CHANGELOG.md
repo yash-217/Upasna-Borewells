@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-01-05
+Added email login, error boundaries
+
 ## [0.2.1] - 2026-01-05
 
 ## [0.2.0] - 2026-01-04

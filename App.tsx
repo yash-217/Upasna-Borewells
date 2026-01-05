@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ConfirmationModal } from './components/common/ConfirmationModal';
 import { SplashScreen } from './components/common/SplashScreen';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { Login } from './components/auth/Login';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
@@ -345,102 +346,104 @@ export default function App() {
         />
 
         <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6 lg:p-8">
-          <React.Suspense fallback={
-            <div className="flex items-center justify-center h-full min-h-[50vh]">
-              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          }>
-          {currentView === View.HOME && (
-             <div className="animate-in fade-in duration-500">
-                <Home currentUser={currentUser} setCurrentView={setCurrentView} View={View} />
-             </div>
-          )}
-          {currentView === View.DASHBOARD && (
-            <div className="animate-in fade-in duration-500">
-               <Dashboard requests={requests} employees={employees} expenses={expenses} vehicleFilter={vehicleFilter} />
-            </div>
-          )}
-          {currentView === View.REQUESTS && (
-            <div className="animate-in fade-in duration-500">
-              <ServiceRequests 
-                requests={requests} 
-                products={products} 
-                vehicles={vehicles}
-                employees={employees}
-                currentUser={currentUser}
-                onAddRequest={handleAddRequest} 
-                onUpdateRequest={handleUpdateRequest}
-                onDeleteRequest={handleDeleteRequest}
-                vehicleFilter={vehicleFilter}
-                isReadOnly={currentUser.isGuest}
-                onResetFilters={handleResetFilters}
-                showToast={showToast}
-              />
-            </div>
-          )}
-          {currentView === View.NEW_REQUEST && (
-            <div className="animate-in fade-in duration-500">
-              <CreateServiceRequest
-                products={products}
-                vehicles={vehicles}
-                currentUser={currentUser}
-                onAddRequest={handleAddRequest}
-                onCancel={() => setCurrentView(View.REQUESTS)}
-                showToast={showToast}
-              />
-            </div>
-          )}
-          {currentView === View.INVENTORY && (
-            <div className="animate-in fade-in duration-500">
-              <Inventory 
-                products={products} 
-                currentUser={currentUser}
-                onAddProduct={handleAddProduct} 
-                onUpdateProduct={handleUpdateProduct} 
-                onDeleteProduct={handleDeleteProduct}
-                isReadOnly={currentUser.isGuest}
-              />
-            </div>
-          )}
-          {currentView === View.EMPLOYEES && (
-            <div className="animate-in fade-in duration-500">
-              <Employees 
-                employees={employees} 
-                vehicles={vehicles}
-                currentUser={currentUser}
-                onAddEmployee={handleAddEmployee} 
-                onUpdateEmployee={handleUpdateEmployee} 
-                onDeleteEmployee={handleDeleteEmployee}
-                vehicleFilter={vehicleFilter}
-                isReadOnly={currentUser.isGuest}
-              />
-            </div>
-          )}
-          {currentView === View.EXPENSES && (
-            <div className="animate-in fade-in duration-500">
-              <Expenses 
-                expenses={expenses}
-                vehicles={vehicles}
-                employees={employees}
-                currentUser={currentUser}
-                onAdd={handleAddExpense}
-                onDelete={handleDeleteExpense}
-                isReadOnly={currentUser.isGuest}
-                vehicleFilter={vehicleFilter}
-                onResetFilters={handleResetFilters}
-              />
-            </div>
-          )}
-          {currentView === View.NEW_EXPENSE && (
-             <div className="animate-in fade-in duration-500">
-               <CreateExpense 
-                 vehicles={vehicles}
-                 onAdd={handleAddExpense}
-                 onCancel={() => setCurrentView(View.EXPENSES)}
-               />
-             </div>
-          )}
-          </React.Suspense>
+          <ErrorBoundary>
+            <React.Suspense fallback={
+              <div className="flex items-center justify-center h-full min-h-[50vh]">
+                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            }>
+            {currentView === View.HOME && (
+               <div className="animate-in fade-in duration-500">
+                  <Home currentUser={currentUser} setCurrentView={setCurrentView} View={View} />
+               </div>
+            )}
+            {currentView === View.DASHBOARD && (
+              <div className="animate-in fade-in duration-500">
+                 <Dashboard requests={requests} employees={employees} expenses={expenses} vehicleFilter={vehicleFilter} />
+              </div>
+            )}
+            {currentView === View.REQUESTS && (
+              <div className="animate-in fade-in duration-500">
+                <ServiceRequests 
+                  requests={requests} 
+                  products={products} 
+                  vehicles={vehicles}
+                  employees={employees}
+                  currentUser={currentUser}
+                  onAddRequest={handleAddRequest} 
+                  onUpdateRequest={handleUpdateRequest}
+                  onDeleteRequest={handleDeleteRequest}
+                  vehicleFilter={vehicleFilter}
+                  isReadOnly={currentUser.isGuest}
+                  onResetFilters={handleResetFilters}
+                  showToast={showToast}
+                />
+              </div>
+            )}
+            {currentView === View.NEW_REQUEST && (
+              <div className="animate-in fade-in duration-500">
+                <CreateServiceRequest
+                  products={products}
+                  vehicles={vehicles}
+                  currentUser={currentUser}
+                  onAddRequest={handleAddRequest}
+                  onCancel={() => setCurrentView(View.REQUESTS)}
+                  showToast={showToast}
+                />
+              </div>
+            )}
+            {currentView === View.INVENTORY && (
+              <div className="animate-in fade-in duration-500">
+                <Inventory 
+                  products={products} 
+                  currentUser={currentUser}
+                  onAddProduct={handleAddProduct} 
+                  onUpdateProduct={handleUpdateProduct} 
+                  onDeleteProduct={handleDeleteProduct}
+                  isReadOnly={currentUser.isGuest}
+                />
+              </div>
+            )}
+            {currentView === View.EMPLOYEES && (
+              <div className="animate-in fade-in duration-500">
+                <Employees 
+                  employees={employees} 
+                  vehicles={vehicles}
+                  currentUser={currentUser}
+                  onAddEmployee={handleAddEmployee} 
+                  onUpdateEmployee={handleUpdateEmployee} 
+                  onDeleteEmployee={handleDeleteEmployee}
+                  vehicleFilter={vehicleFilter}
+                  isReadOnly={currentUser.isGuest}
+                />
+              </div>
+            )}
+            {currentView === View.EXPENSES && (
+              <div className="animate-in fade-in duration-500">
+                <Expenses 
+                  expenses={expenses}
+                  vehicles={vehicles}
+                  employees={employees}
+                  currentUser={currentUser}
+                  onAdd={handleAddExpense}
+                  onDelete={handleDeleteExpense}
+                  isReadOnly={currentUser.isGuest}
+                  vehicleFilter={vehicleFilter}
+                  onResetFilters={handleResetFilters}
+                />
+              </div>
+            )}
+            {currentView === View.NEW_EXPENSE && (
+               <div className="animate-in fade-in duration-500">
+                 <CreateExpense 
+                   vehicles={vehicles}
+                   onAdd={handleAddExpense}
+                   onCancel={() => setCurrentView(View.EXPENSES)}
+                 />
+               </div>
+            )}
+            </React.Suspense>
+          </ErrorBoundary>
         </div>
       </main>
     </div>

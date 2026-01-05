@@ -1,6 +1,6 @@
 import React from 'react';
 import { Menu, Droplets, Eye, Truck } from 'lucide-react';
-import { User, Vehicle } from '../../types';
+import { User, Vehicle, View } from '../../types';
 
 interface HeaderProps {
   setSidebarOpen: (isOpen: boolean) => void;
@@ -8,6 +8,7 @@ interface HeaderProps {
   vehicleFilter: string;
   setVehicleFilter: (filter: string) => void;
   vehicles: Vehicle[];
+  setCurrentView: (view: View) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -15,7 +16,8 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   vehicleFilter,
   setVehicleFilter,
-  vehicles
+  vehicles,
+  setCurrentView
 }) => {
   return (
     <header className="bg-white dark:bg-neutral-900 border-b border-slate-200 dark:border-neutral-800 sticky top-0 z-30 transition-all duration-200">
@@ -37,7 +39,10 @@ export const Header: React.FC<HeaderProps> = ({
           
           {/* Mobile Right: Just Profile */}
           <div className="flex items-center gap-2 md:hidden">
-             <div className="h-9 w-9 rounded-full bg-slate-200 dark:bg-neutral-800 overflow-hidden border border-slate-300 dark:border-neutral-700 flex items-center justify-center">
+             <div 
+               onClick={() => setCurrentView(View.PROFILE)}
+               className="h-9 w-9 rounded-full bg-slate-200 dark:bg-neutral-800 overflow-hidden border border-slate-300 dark:border-neutral-700 flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+             >
                 {currentUser.photoURL ? (
                   <img src={currentUser.photoURL} alt="User" className="w-full h-full object-cover" />
                 ) : currentUser.isGuest ? (
@@ -63,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
               </select>
            </div>
 
-           <div className="flex items-center gap-3 pl-3 border-l border-slate-200 dark:border-neutral-800">
+           <div className="flex items-center gap-3 pl-3 border-l border-slate-200 dark:border-neutral-800 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setCurrentView(View.PROFILE)}>
               <div className="flex flex-col text-right">
                   <span className="text-sm font-semibold text-slate-800 dark:text-white">{currentUser.name}</span>
                   <span className="text-xs text-slate-500 dark:text-neutral-500">
