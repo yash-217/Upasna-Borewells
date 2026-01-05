@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Employee, User, Vehicle } from '../types';
+import { Employee, User, Vehicle } from '../../types';
 import { UserPlus, X, Phone, Calendar, DollarSign, Truck, Edit2, Trash2, Mail } from 'lucide-react';
 
 interface EmployeesProps {
@@ -65,6 +65,9 @@ export const Employees: React.FC<EmployeesProps> = ({
     ? employees 
     : employees.filter(e => e.assignedVehicle === vehicleFilter);
 
+  const admins = filteredEmployees.filter(e => e.role === 'admin');
+  const staff = filteredEmployees.filter(e => e.role !== 'admin');
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -79,8 +82,13 @@ export const Employees: React.FC<EmployeesProps> = ({
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
-        {filteredEmployees.length > 0 ? filteredEmployees.map((emp) => (
+      {filteredEmployees.length > 0 ? (
+        <div className="space-y-8">
+          {[{ title: 'Administrators', list: admins }, { title: 'Staff', list: staff }].map((group) => group.list.length > 0 && (
+            <div key={group.title}>
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 px-1">{group.title}</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
+                {group.list.map((emp) => (
           <div key={emp.id} className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 p-6 flex items-start space-x-4">
             <img 
               src={`https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=random`} 
@@ -117,8 +125,8 @@ export const Employees: React.FC<EmployeesProps> = ({
               <div className="space-y-1.5">
                 {emp.email && (
                   <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
-                    <Mail size={14} className="mr-2 opacity-70" />
-                    {emp.email}
+                    <Mail size={14} className="mr-2 opacity-70 shrink-0" />
+                    <span className="truncate">{emp.email}</span>
                   </div>
                 )}
                 <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
@@ -150,12 +158,16 @@ export const Employees: React.FC<EmployeesProps> = ({
               )}
             </div>
           </div>
-        )) : (
-          <div className="col-span-full py-10 text-center text-slate-400 dark:text-neutral-500">
-             No employees assigned to {vehicleFilter}.
-          </div>
-        )}
-      </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="py-10 text-center text-slate-400 dark:text-neutral-500">
+           No employees assigned to {vehicleFilter}.
+        </div>
+      )}
 
       {/* Add/Edit Employee Modal */}
       {isModalOpen && (

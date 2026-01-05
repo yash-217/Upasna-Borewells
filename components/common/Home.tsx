@@ -1,5 +1,5 @@
 import React from 'react';
-import { User } from '../types';
+import { User } from '../../types';
 import { Droplets, Wrench, PieChart, Info, ArrowRight } from 'lucide-react';
 
 interface HomeProps {

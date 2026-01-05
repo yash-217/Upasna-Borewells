@@ -139,10 +139,39 @@ export interface Vehicle extends TrackedEntity {
 }
 
 export interface User {
+
   name: string;
+
   email: string;
+
   photoURL?: string;
+
   isGuest?: boolean;
+
   role?: 'admin' | 'staff';
+
   employeeId?: string;
+
+}
+
+
+
+export enum View {
+
+  HOME = 'Home',
+
+  DASHBOARD = 'Dashboard',
+
+  REQUESTS = 'Service Requests',
+
+  NEW_REQUEST = 'New Request',
+
+  EXPENSES = 'Expenses',
+
+  NEW_EXPENSE = 'New Expense',
+
+  INVENTORY = 'Inventory',
+
+  EMPLOYEES = 'Employees',  
+
 }

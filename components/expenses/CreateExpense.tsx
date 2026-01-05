@@ -1,7 +1,7 @@
 import React, { useState, ChangeEvent } from 'react';
 import Tesseract from 'tesseract.js';
 import { Truck, Upload, Plus, FileSpreadsheet } from 'lucide-react';
-import { Vehicle } from '../types';
+import { Vehicle } from '../../types';
 import { Expense } from './Expenses';
 
 interface CreateExpenseProps {

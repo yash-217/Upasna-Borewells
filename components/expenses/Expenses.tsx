@@ -1,7 +1,7 @@
 import React, { useState, ChangeEvent, useEffect } from 'react';
 import Tesseract from 'tesseract.js';
 import { Trash2, Search, X, Plus, Truck, Upload, Calendar, DollarSign, FileText, Wrench, FileSpreadsheet, User as UserIcon } from 'lucide-react';
-import { Vehicle, Employee, User } from '../types';
+import { Vehicle, Employee, User } from '../../types';
 
 export interface Expense {
   id: string;

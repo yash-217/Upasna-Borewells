@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Product, ServiceRequest, ServiceStatus, User, Vehicle, Employee } from '../types';
+import { Product, ServiceRequest, ServiceStatus, User, Vehicle, Employee } from '../../types';
 import { Search, Filter, Edit2, Trash2, X, Truck, Eye, Calendar, Phone, MessageCircle, Map, User as UserIcon } from 'lucide-react';
 import { ServiceRequestForm } from './ServiceRequestForm';
 

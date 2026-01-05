@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Product, User } from '../types';
+import { Product, User } from '../../types';
 import { Plus, Edit2, Trash2, X, Package, ChevronRight } from 'lucide-react';
 
 interface InventoryProps {
