@@ -26,20 +26,25 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const showFilter = FILTER_VIEWS.includes(currentView);
   return (
-    <header className="bg-white dark:bg-neutral-900 border-b border-slate-200 dark:border-neutral-800 sticky top-0 z-30 transition-all duration-200">
-      <div className="flex flex-col md:flex-row md:items-center justify-between px-4 lg:px-8 py-3 gap-3">
+    <header className="sticky top-0 z-30 px-4 py-3 lg:px-8 lg:py-4 transition-all duration-200">
+      <div className="glass dark:glass-dark rounded-2xl px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center justify-between w-full md:w-auto">
           {/* Left: Hamburger (For Settings on Mobile) & Title */}
           <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-800 rounded-lg touch-manipulation">
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl touch-manipulation">
               <Menu size={24} />
             </button>
             {/* Mobile Brand Label instead of page title */}
             <div className="lg:hidden flex items-center gap-2">
-              <div className="bg-blue-600 p-1.5 rounded-lg text-white">
+              <div className="bg-brand-600 p-1.5 rounded-lg text-white">
                 <Droplets size={18} />
               </div>
-              <span className="font-bold text-slate-800 dark:text-white text-lg tracking-tight">Upasna<span className="text-blue-600 dark:text-blue-400">Borewells</span></span>
+              <span className="font-bold text-slate-900 dark:text-white text-lg tracking-tight">Upasna<span className="text-brand-600 dark:text-brand-400">Borewells</span></span>
+            </div>
+
+            {/* Desktop Title Hint */}
+            <div className="hidden lg:block">
+              <h2 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">{currentView}</h2>
             </div>
           </div>
 
@@ -47,14 +52,14 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-2 md:hidden">
             <div
               onClick={() => setCurrentView(View.PROFILE)}
-              className="h-9 w-9 rounded-full bg-slate-200 dark:bg-neutral-800 overflow-hidden border border-slate-300 dark:border-neutral-700 flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+              className="h-10 w-10 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden border-2 border-white dark:border-white/10 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform"
             >
               {currentUser.photoURL ? (
                 <img src={currentUser.photoURL} alt="User" className="w-full h-full object-cover" />
               ) : currentUser.isGuest ? (
-                <Eye size={16} className="text-slate-500 dark:text-neutral-400" />
+                <Eye size={18} className="text-slate-500 dark:text-slate-400" />
               ) : (
-                <div className="text-slate-500 font-bold">{currentUser.name[0]}</div>
+                <div className="text-slate-500 dark:text-white font-bold">{currentUser.name[0]}</div>
               )}
             </div>
           </div>
@@ -63,12 +68,12 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Desktop: Filters & Profile */}
         <div className="hidden md:flex flex-1 flex-row items-center justify-end gap-6">
           {showFilter && (
-            <div className="flex items-center bg-slate-100 dark:bg-black rounded-lg px-3 py-2 border border-slate-200 dark:border-neutral-800">
-              <Truck size={16} className="text-slate-500 dark:text-neutral-500 mr-2 shrink-0" />
+            <div className="flex items-center bg-slate-50 dark:bg-black/40 rounded-full px-4 py-2 border border-slate-200 dark:border-white/10 hover:border-brand-300 dark:hover:border-brand-700 transition-colors group">
+              <Truck size={16} className="text-slate-400 dark:text-slate-500 mr-2 shrink-0 group-hover:text-brand-500 transition-colors" />
               <select
                 value={vehicleFilter}
                 onChange={(e) => setVehicleFilter(e.target.value)}
-                className="bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-700 dark:text-neutral-300 w-48 cursor-pointer dark:bg-black focus:outline-none"
+                className="bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-700 dark:text-slate-200 w-48 cursor-pointer focus:outline-none"
               >
                 <option value="All Vehicles">All Vehicles</option>
                 {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
@@ -76,34 +81,40 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          <div className="flex items-center gap-3 pl-3 border-l border-slate-200 dark:border-neutral-800 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setCurrentView(View.PROFILE)}>
+          <div className="h-8 w-px bg-slate-200 dark:bg-white/10"></div>
+
+          <div
+            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity p-1.5 pr-2 rounded-full hover:bg-slate-50 dark:hover:bg-white/5"
+            onClick={() => setCurrentView(View.PROFILE)}
+          >
             <div className="flex flex-col text-right">
               <span className="text-sm font-semibold text-slate-800 dark:text-white">{currentUser.name}</span>
-              <span className="text-xs text-slate-500 dark:text-neutral-500">
-                {currentUser.isGuest ? 'Read Only Access' : currentUser.email}
+              <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center justify-end gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${currentUser.isGuest ? 'bg-amber-500' : 'bg-green-500'}`}></span>
+                {currentUser.role}
               </span>
             </div>
-            <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-neutral-800 overflow-hidden border border-slate-300 dark:border-neutral-700 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden border-2 border-white dark:border-white/10 shadow-sm flex items-center justify-center">
               {currentUser.photoURL ? (
                 <img src={currentUser.photoURL} alt="User" className="w-full h-full object-cover" />
               ) : currentUser.isGuest ? (
-                <Eye size={20} className="text-slate-500 dark:text-neutral-400" />
+                <Eye size={20} className="text-slate-500 dark:text-slate-400" />
               ) : (
-                <div className="text-slate-500 font-bold">{currentUser.name[0]}</div>
+                <div className="text-slate-500 dark:text-white font-bold">{currentUser.name[0]}</div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Mobile Filters (Below header) */}
+        {/* Mobile Filters (Below header content) */}
         {showFilter && (
-          <div className="md:hidden">
-            <div className="flex items-center bg-slate-100 dark:bg-neutral-800 rounded-lg px-3 py-2">
-              <Truck size={16} className="text-slate-500 dark:text-neutral-500 mr-2 shrink-0" />
+          <div className="md:hidden mt-2 pt-2 border-t border-slate-100 dark:border-white/5">
+            <div className="flex items-center bg-slate-50 dark:bg-black/20 rounded-xl px-3 py-2 border border-slate-200 dark:border-white/10">
+              <Truck size={16} className="text-slate-500 dark:text-slate-400 mr-2 shrink-0" />
               <select
                 value={vehicleFilter}
                 onChange={(e) => setVehicleFilter(e.target.value)}
-                className="w-full bg-transparent border-none text-sm font-medium text-slate-700 dark:text-neutral-300 focus:outline-none"
+                className="w-full bg-transparent border-none text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none"
               >
                 <option value="All Vehicles">All Vehicles</option>
                 {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}

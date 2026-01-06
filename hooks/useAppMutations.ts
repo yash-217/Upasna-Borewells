@@ -181,6 +181,24 @@ export const useAppMutations = ({ queryClient, currentUser, showToast }: UseAppM
     onError: createErrorHandler('deleteExpense', ErrorMessages.expense.delete, showToast)
   });
 
+  const updateExpenseMutation = useMutation({
+    mutationFn: async (exp: Expense) => {
+      const { id, ...rest } = exp;
+      const dbData = {
+        ...rest,
+        last_edited_by: currentUser?.name,
+        last_edited_at: new Date().toISOString()
+      };
+      const { error } = await supabase.from('expenses').update(dbData).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      showToast('Expense updated successfully', 'success');
+    },
+    onError: createErrorHandler('updateExpense', 'Failed to update expense', showToast)
+  });
+
   // User Profile Update
   const updateUserProfileMutation = useMutation({
     mutationFn: async (updates: Partial<User>) => {
@@ -219,6 +237,7 @@ export const useAppMutations = ({ queryClient, currentUser, showToast }: UseAppM
     updateEmployee: updateEmployeeMutation.mutate,
     deleteEmployee: deleteEmployeeMutation.mutate,
     addExpense: addExpenseMutation.mutate,
+    updateExpense: updateExpenseMutation.mutate,
     deleteExpense: deleteExpenseMutation.mutate,
     updateUserProfile: updateUserProfileMutation.mutateAsync,
     // Expose loading states for UI feedback
@@ -233,6 +252,7 @@ export const useAppMutations = ({ queryClient, currentUser, showToast }: UseAppM
       updateEmployee: updateEmployeeMutation.isPending,
       deleteEmployee: deleteEmployeeMutation.isPending,
       addExpense: addExpenseMutation.isPending,
+      updateExpense: updateExpenseMutation.isPending,
       deleteExpense: deleteExpenseMutation.isPending,
       updateUserProfile: updateUserProfileMutation.isPending,
     },

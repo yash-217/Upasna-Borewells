@@ -56,7 +56,7 @@ export default function App() {
     addRequest, updateRequest, deleteRequest,
     addProduct, updateProduct, deleteProduct,
     addEmployee, updateEmployee, deleteEmployee,
-    addExpense, deleteExpense, updateUserProfile
+    addExpense, updateExpense, deleteExpense, updateUserProfile
   } = useAppMutations({ queryClient, currentUser, showToast });
 
   // Handler adapters with confirmations
@@ -91,6 +91,7 @@ export default function App() {
   };
 
   const handleAddExpense = (exp: Expense) => addExpense(exp);
+  const handleUpdateExpense = (exp: Expense) => updateExpense(exp);
   const handleDeleteExpense = (id: string) => deleteExpense(id);
   const handleResetFilters = () => setVehicleFilter('All Vehicles');
 
@@ -106,9 +107,15 @@ export default function App() {
 
   return (
     <div
-      className="min-h-screen bg-slate-50 dark:bg-black flex transition-colors duration-200 overflow-x-hidden"
+      className="min-h-screen bg-slate-50 dark:bg-[#050505] transition-colors duration-200 overflow-x-hidden relative"
       {...swipeHandlers}
     >
+      {/* Background Mesh Gradient */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-brand-500/10 dark:bg-brand-500/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-brand-600/10 dark:bg-brand-600/10 rounded-full blur-[120px]" />
+      </div>
+
       {/* Toast Notification */}
       <Toast
         message={toast.message}
@@ -142,7 +149,7 @@ export default function App() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden bg-slate-50 dark:bg-black w-full lg:ml-72">
+      <main className="relative z-10 flex-1 flex flex-col min-h-screen overflow-hidden w-full lg:pl-80 transition-all duration-300">
         {/* Header */}
         <Header
           setSidebarOpen={setSidebarOpen}
@@ -235,8 +242,9 @@ export default function App() {
                     employees={employees}
                     currentUser={currentUser}
                     onAdd={handleAddExpense}
+                    onUpdate={handleUpdateExpense}
                     onDelete={handleDeleteExpense}
-                    isReadOnly={currentUser.isGuest}
+                    isReadOnly={!!currentUser.isGuest}
                     vehicleFilter={vehicleFilter}
                     onResetFilters={handleResetFilters}
                   />
