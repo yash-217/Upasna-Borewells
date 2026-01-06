@@ -1,6 +1,5 @@
-import React from 'react';
-import { ServiceRequest, ServiceStatus, Employee } from '../../types';
-import { Expense } from '../expenses/Expenses';
+import React, { useMemo } from 'react';
+import { ServiceRequest, ServiceStatus, Employee, Expense } from '../../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { DollarSign, TrendingUp, Users, Activity, AlertCircle, TrendingDown } from 'lucide-react';
 
@@ -11,50 +10,78 @@ interface DashboardProps {
   vehicleFilter: string;
 }
 
+// Chart data types - index signature needed for Recharts compatibility
+interface ChartDataItem {
+  name: string;
+  value: number;
+  [key: string]: string | number;
+}
+
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, expenses, vehicleFilter }) => {
-  // Filter Data based on Vehicle
-  const filteredRequests = vehicleFilter === 'All Vehicles' 
-    ? requests 
-    : requests.filter(r => r.vehicle === vehicleFilter);
+  // Memoize filtered data to prevent recalculation on every render
+  const filteredRequests = useMemo(() =>
+    vehicleFilter === 'All Vehicles'
+      ? requests
+      : requests.filter(r => r.vehicle === vehicleFilter),
+    [requests, vehicleFilter]
+  );
 
-  const filteredEmployees = vehicleFilter === 'All Vehicles'
-    ? employees
-    : employees.filter(e => e.assignedVehicle === vehicleFilter);
+  const filteredEmployees = useMemo(() =>
+    vehicleFilter === 'All Vehicles'
+      ? employees
+      : employees.filter(e => e.assignedVehicle === vehicleFilter),
+    [employees, vehicleFilter]
+  );
 
-  // Calculate stats
-  const totalRevenue = filteredRequests
-    .filter(r => r.status === ServiceStatus.COMPLETED)
-    .reduce((sum, r) => sum + r.totalCost, 0);
+  // Memoize calculated stats
+  const totalRevenue = useMemo(() =>
+    filteredRequests
+      .filter(r => r.status === ServiceStatus.COMPLETED)
+      .reduce((sum, r) => sum + r.totalCost, 0),
+    [filteredRequests]
+  );
 
-  const totalExpenses = expenses
-    .filter(e => vehicleFilter === 'All Vehicles' || e.description.includes(vehicleFilter) || e.type === 'Fuel') // Basic filtering for expenses
-    .reduce((sum, e) => sum + e.amount, 0);
+  const totalExpenses = useMemo(() =>
+    expenses
+      .filter(e => vehicleFilter === 'All Vehicles' || (e.description && e.description.includes(vehicleFilter)) || e.type === 'Fuel')
+      .reduce((sum, e) => sum + e.amount, 0),
+    [expenses, vehicleFilter]
+  );
 
-  const pendingRequests = filteredRequests.filter(r => r.status !== ServiceStatus.COMPLETED && r.status !== ServiceStatus.CANCELLED).length;
-  
-  // Chart Data Preparation
-  const revenueByMonth = filteredRequests.reduce((acc: any, curr) => {
-    const month = new Date(curr.date).toLocaleString('default', { month: 'short' });
-    const existing = acc.find((d: any) => d.name === month);
-    if (existing) {
-      existing.value += curr.totalCost;
-    } else {
-      acc.push({ name: month, value: curr.totalCost });
-    }
-    return acc;
-  }, []);
+  const pendingRequests = useMemo(() =>
+    filteredRequests.filter(r => r.status !== ServiceStatus.COMPLETED && r.status !== ServiceStatus.CANCELLED).length,
+    [filteredRequests]
+  );
 
-  const serviceTypeDistribution = filteredRequests.reduce((acc: any, curr) => {
-    const existing = acc.find((d: any) => d.name === curr.type);
-    if (existing) {
-      existing.value += 1;
-    } else {
-      acc.push({ name: curr.type, value: 1 });
-    }
-    return acc;
-  }, []);
+  // Memoize chart data preparation
+  const revenueByMonth = useMemo(() =>
+    filteredRequests.reduce<ChartDataItem[]>((acc, curr) => {
+      const month = new Date(curr.date).toLocaleString('default', { month: 'short' });
+      const existing = acc.find(d => d.name === month);
+      if (existing) {
+        existing.value += curr.totalCost;
+      } else {
+        acc.push({ name: month, value: curr.totalCost });
+      }
+      return acc;
+    }, []),
+    [filteredRequests]
+  );
+
+  const serviceTypeDistribution = useMemo(() =>
+    filteredRequests.reduce<ChartDataItem[]>((acc, curr) => {
+      const existing = acc.find(d => d.name === curr.type);
+      if (existing) {
+        existing.value += 1;
+      } else {
+        acc.push({ name: curr.type, value: 1 });
+      }
+      return acc;
+    }, []),
+    [filteredRequests]
+  );
 
   if (filteredRequests.length === 0 && vehicleFilter !== 'All Vehicles') {
     return (
@@ -81,7 +108,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, expen
             </div>
           </div>
           <span className="text-xs text-slate-400 dark:text-neutral-500 font-medium mt-2 block">
-             {vehicleFilter === 'All Vehicles' ? 'Total across all vehicles' : `For ${vehicleFilter}`}
+            {vehicleFilter === 'All Vehicles' ? 'Total across all vehicles' : `For ${vehicleFilter}`}
           </span>
         </div>
 
@@ -96,7 +123,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, expen
             </div>
           </div>
           <span className="text-xs text-slate-400 dark:text-neutral-500 font-medium mt-2 block">
-             Total recorded expenses
+            Total recorded expenses
           </span>
         </div>
 
@@ -148,15 +175,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, expen
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={revenueByMonth}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--tw-prose-invert-bg)" className="opacity-10 dark:opacity-20" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8'}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8'}} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(0,0,0,0.8)', 
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgba(0,0,0,0.8)',
                     color: '#fff',
-                    borderRadius: '8px', 
-                    border: '1px solid #333', 
-                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.5)' 
+                    borderRadius: '8px',
+                    border: '1px solid #333',
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.5)'
                   }}
                   itemStyle={{ color: '#fff' }}
                   formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Revenue']}
@@ -184,15 +211,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, expen
                       dataKey="value"
                       stroke="none"
                     >
-                      {serviceTypeDistribution.map((entry: any, index: number) => (
+                      {serviceTypeDistribution.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'rgba(0,0,0,0.8)', 
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'rgba(0,0,0,0.8)',
                         color: '#fff',
-                        borderRadius: '8px', 
+                        borderRadius: '8px',
                         border: '1px solid #333',
                       }}
                       itemStyle={{ color: '#fff' }}
@@ -201,17 +228,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ requests, employees, expen
                 </ResponsiveContainer>
               </div>
               <div className="flex flex-wrap justify-center gap-2 mt-4">
-                 {serviceTypeDistribution.map((entry: any, index: number) => (
-                   <div key={index} className="flex items-center text-xs text-slate-600 dark:text-neutral-300">
-                      <span className="w-2 h-2 rounded-full mr-1" style={{ backgroundColor: COLORS[index % COLORS.length]}}></span>
-                      {entry.name}
-                   </div>
-                 ))}
+                {serviceTypeDistribution.map((entry, index) => (
+                  <div key={index} className="flex items-center text-xs text-slate-600 dark:text-neutral-300">
+                    <span className="w-2 h-2 rounded-full mr-1" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
+                    {entry.name}
+                  </div>
+                ))}
               </div>
             </>
           ) : (
             <div className="h-64 flex items-center justify-center text-slate-400">
-               No data available
+              No data available
             </div>
           )}
         </div>
