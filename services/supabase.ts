@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
-import { 
+import {
   Employee, Product, ServiceRequest, Vehicle,
-  DBEmployee, DBProduct, DBServiceRequest, DBVehicle,
   ServiceType, ServiceStatus
-} from '../types';
+} from '../types/index';
+import {
+  DBEmployee, DBProduct, DBServiceRequest, DBVehicle
+} from '../types/database';
 
 // Standardized Env Access for Vite
 const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL;
@@ -14,7 +16,7 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 export const supabase = createClient(
-  supabaseUrl || '', 
+  supabaseUrl || '',
   supabaseKey || ''
 );
 
@@ -23,7 +25,7 @@ export const supabase = createClient(
 // Safely parses a date string. If invalid or empty, returns NULL (for DB).
 const safeDateToDB = (dateStr: string | undefined): string | null => {
   if (!dateStr || dateStr.trim() === '') return null;
-  
+
   let date: Date | null = null;
 
   // 1. Try manual DD/MM/YYYY parsing first to be strict
@@ -44,13 +46,13 @@ const safeDateToDB = (dateStr: string | undefined): string | null => {
 
   // Check validity
   if (!date || isNaN(date.getTime())) return null;
-  
+
   // Format as YYYY-MM-DD (ISO 8601 Date only)
   // Use user's local year/month/day but formatted as ISO string part
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
-  
+
   return `${y}-${m}-${d}`;
 };
 
@@ -68,7 +70,7 @@ const safeTimestampToDB = (dateStr: string | undefined): string | null => {
       const month = parseInt(dmyMatch[2], 10) - 1;
       const year = parseInt(dmyMatch[3], 10);
       date = new Date(year, month, day);
-      
+
       // If time part exists? "23/01/2025, 10:30 PM" - simplistic handling:
       // If we just need the date valid, setting to 00:00:00 is often fine for metadata if parsing fails,
       // but let's try to preserve it if possible or just default to current time if ambiguous.
@@ -165,7 +167,7 @@ export const mapRequestFromDB = (data: DBServiceRequest): ServiceRequest => ({
   casing10Rate: Number(data.casing10_rate) || 0,
   latitude: data.latitude !== null ? Number(data.latitude) : undefined,
   longitude: data.longitude !== null ? Number(data.longitude) : undefined,
-  items: Array.isArray(data.items) ? data.items : [], 
+  items: Array.isArray(data.items) ? data.items : [],
   lastEditedBy: data.last_edited_by || undefined,
   lastEditedAt: data.last_edited_at || undefined,
   createdBy: data.created_by || undefined

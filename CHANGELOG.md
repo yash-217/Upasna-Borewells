@@ -2,8 +2,12 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-01-06
+
+- feat: Implement new authentication flow with `useAuth` hook and refactor types, queries, and contexts for improved structure and error handling.
+
 ## [0.2.2] - 2026-01-05
-Added email login, error boundaries
+- Added email login, error boundaries
 
 ## [0.2.1] - 2026-01-05
 
