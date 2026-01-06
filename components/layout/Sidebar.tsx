@@ -5,9 +5,6 @@ import {
   Package,
   Users as UsersIcon,
   Droplets,
-  Moon,
-  Sun,
-  LogOut,
   PieChart,
   Plus,
   Home as HomeIcon
@@ -20,9 +17,6 @@ interface SidebarProps {
   currentView: View;
   setCurrentView: (view: View) => void;
   currentUser: User;
-  darkMode: boolean;
-  toggleDarkMode: () => void;
-  handleLogout: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -30,19 +24,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setIsOpen,
   currentView,
   setCurrentView,
-  currentUser,
-  darkMode,
-  toggleDarkMode,
-  handleLogout
+  currentUser
 }) => {
   const NavItem = ({ view, icon: Icon }: { view: View; icon: React.ElementType }) => (
     <button
       onClick={() => { setCurrentView(view); setIsOpen(false); }}
-      className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-lg transition-colors mb-1 touch-manipulation select-none ${
-        currentView === view 
-          ? 'bg-blue-600 text-white shadow-md' 
-          : 'text-slate-600 dark:text-neutral-400 hover:bg-blue-50 dark:hover:bg-neutral-800 hover:text-blue-600 dark:hover:text-blue-400'
-      }`}
+      className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-lg transition-colors mb-1 touch-manipulation select-none ${currentView === view
+        ? 'bg-blue-600 text-white shadow-md'
+        : 'text-slate-600 dark:text-neutral-400 hover:bg-blue-50 dark:hover:bg-neutral-800 hover:text-blue-600 dark:hover:text-blue-400'
+        }`}
     >
       <Icon size={20} />
       <span className="font-medium">{view}</span>
@@ -59,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Droplets size={24} />
         </div>
         <div>
-          <h1 className="font-bold text-slate-800 dark:text-white leading-tight text-lg">Upasna<br/><span className="text-blue-600 dark:text-blue-400">Borewells</span></h1>
+          <h1 className="font-bold text-slate-800 dark:text-white leading-tight text-lg">Upasna<br /><span className="text-blue-600 dark:text-blue-400">Borewells</span></h1>
         </div>
       </div>
 
@@ -70,16 +60,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {currentUser.role !== 'staff' && (
           <NavItem view={View.DASHBOARD} icon={LayoutDashboard} />
         )}
-        
+
         <div className="pt-4 pb-2">
           <p className="px-4 text-xs font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider">Services</p>
         </div>
-        
+
         {!currentUser.isGuest && (
-           <NavItem view={View.NEW_REQUEST} icon={Plus} />
+          <NavItem view={View.NEW_REQUEST} icon={Plus} />
         )}
         {!currentUser.isGuest && (
-           <NavItem view={View.NEW_EXPENSE} icon={Plus} />
+          <NavItem view={View.NEW_EXPENSE} icon={Plus} />
         )}
 
         <div className="pt-4 pb-2">
@@ -92,21 +82,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <NavItem view={View.INVENTORY} icon={Package} />
             <NavItem view={View.EMPLOYEES} icon={UsersIcon} />
           </>
-        )}          
+        )}
       </nav>
 
-      <div className="border-t border-slate-100 dark:border-neutral-800 p-4 space-y-2 mt-auto">
-         <button onClick={toggleDarkMode} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 dark:text-neutral-400 hover:bg-slate-50 dark:hover:bg-neutral-800 hover:text-slate-700 dark:hover:text-neutral-200 rounded-lg transition-colors touch-manipulation">
-           {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-           <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
-         </button>
-         <button onClick={handleLogout} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 dark:text-neutral-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors touch-manipulation">
-           <LogOut size={20} />
-           <span>Sign Out</span>
-         </button>
-         <div className="px-4 py-2 text-xs text-slate-400 dark:text-neutral-600 text-center">
-           v1.8.0 &copy; 2024
-         </div>
+      <div className="border-t border-slate-100 dark:border-neutral-800 p-4 mt-auto">
+        <div className="px-4 py-2 text-xs text-slate-400 dark:text-neutral-600 text-center">
+          v1.8.0 &copy; 2024
+        </div>
       </div>
     </aside>
   );

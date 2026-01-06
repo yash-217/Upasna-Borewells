@@ -22,6 +22,7 @@ const Employees = React.lazy(() => import('./components/employees/Employees').th
 const Expenses = React.lazy(() => import('./components/expenses/Expenses').then(module => ({ default: module.Expenses })));
 const CreateExpense = React.lazy(() => import('./components/expenses/CreateExpense').then(module => ({ default: module.CreateExpense })));
 const Home = React.lazy(() => import('./components/common/Home').then(module => ({ default: module.Home })));
+const Profile = React.lazy(() => import('./components/profile/Profile').then(module => ({ default: module.Profile })));
 
 export default function App() {
   const queryClient = useQueryClient();
@@ -55,7 +56,7 @@ export default function App() {
     addRequest, updateRequest, deleteRequest,
     addProduct, updateProduct, deleteProduct,
     addEmployee, updateEmployee, deleteEmployee,
-    addExpense, deleteExpense
+    addExpense, deleteExpense, updateUserProfile
   } = useAppMutations({ queryClient, currentUser, showToast });
 
   // Handler adapters with confirmations
@@ -138,9 +139,6 @@ export default function App() {
         currentView={currentView}
         setCurrentView={setCurrentView}
         currentUser={currentUser}
-        darkMode={darkMode}
-        toggleDarkMode={toggleDarkMode}
-        handleLogout={handleLogout}
       />
 
       {/* Main Content */}
@@ -149,6 +147,7 @@ export default function App() {
         <Header
           setSidebarOpen={setSidebarOpen}
           currentUser={currentUser}
+          currentView={currentView}
           vehicleFilter={vehicleFilter}
           setVehicleFilter={setVehicleFilter}
           vehicles={vehicles}
@@ -249,6 +248,19 @@ export default function App() {
                     vehicles={vehicles}
                     onAdd={handleAddExpense}
                     onCancel={() => setCurrentView(View.EXPENSES)}
+                  />
+                </div>
+              )}
+              {currentView === View.PROFILE && (
+                <div className="animate-in fade-in duration-500 -m-4 md:-m-6 lg:-m-8">
+                  <Profile
+                    currentUser={currentUser}
+                    darkMode={darkMode}
+                    toggleDarkMode={toggleDarkMode}
+                    handleLogout={handleLogout}
+                    setCurrentView={setCurrentView}
+                    onUpdateProfile={updateUserProfile}
+                    showToast={showToast}
                   />
                 </div>
               )}

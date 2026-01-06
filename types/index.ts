@@ -111,8 +111,14 @@ export interface Expense extends TrackedEntity {
 export interface User {
     name: string;
     email: string;
+    phone?: string;
     photoURL?: string;
     isGuest?: boolean;
     role?: 'admin' | 'staff';
     employeeId?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
 }

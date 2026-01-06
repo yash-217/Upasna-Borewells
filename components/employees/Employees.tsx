@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Employee, User, Vehicle } from '../../types';
+import { formatPhoneNumberInput } from '../../lib/formatters';
 import { UserPlus, X, Phone, Calendar, DollarSign, Truck, Edit2, Trash2, Mail } from 'lucide-react';
 
 interface EmployeesProps {
@@ -13,7 +14,7 @@ interface EmployeesProps {
   isReadOnly?: boolean;
 }
 
-export const Employees: React.FC<EmployeesProps> = ({ 
+export const Employees: React.FC<EmployeesProps> = ({
   employees, vehicles, currentUser, onAddEmployee, onUpdateEmployee, onDeleteEmployee, vehicleFilter, isReadOnly
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,17 +24,17 @@ export const Employees: React.FC<EmployeesProps> = ({
   });
 
   const openModal = (emp?: Employee) => {
-    if (isReadOnly && !emp) return; 
+    if (isReadOnly && !emp) return;
 
     if (emp) {
       setEditingEmployee(emp);
       setFormData(emp);
     } else {
       setEditingEmployee(null);
-      setFormData({ 
-        name: '', designation: '', role: 'staff', email: '', phone: '', salary: 0, 
-        joinDate: new Date().toISOString().split('T')[0], 
-        assignedVehicle: vehicles.length > 0 ? vehicles[0].name : '' 
+      setFormData({
+        name: '', designation: '', role: 'staff', email: '', phone: '', salary: 0,
+        joinDate: new Date().toISOString().split('T')[0],
+        assignedVehicle: vehicles.length > 0 ? vehicles[0].name : ''
       });
     }
     setIsModalOpen(true);
@@ -61,8 +62,8 @@ export const Employees: React.FC<EmployeesProps> = ({
     setIsModalOpen(false);
   };
 
-  const filteredEmployees = vehicleFilter === 'All Vehicles' 
-    ? employees 
+  const filteredEmployees = vehicleFilter === 'All Vehicles'
+    ? employees
     : employees.filter(e => e.assignedVehicle === vehicleFilter);
 
   const admins = filteredEmployees.filter(e => e.role === 'admin');
@@ -73,7 +74,7 @@ export const Employees: React.FC<EmployeesProps> = ({
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Staff Directory</h2>
         {!isReadOnly && (
-          <button 
+          <button
             onClick={() => openModal()}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm text-sm touch-manipulation"
           >
@@ -89,75 +90,75 @@ export const Employees: React.FC<EmployeesProps> = ({
               <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 px-1">{group.title}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
                 {group.list.map((emp) => (
-          <div key={emp.id} className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 p-6 flex items-start space-x-4">
-            <img 
-              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=random`} 
-              alt={emp.name} 
-              className="w-14 h-14 rounded-full object-cover border-2 border-slate-100 dark:border-neutral-700"
-            />
-            <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-start mb-1">
-                <h3 className="font-bold text-slate-800 dark:text-white text-lg truncate pr-2">{emp.name}</h3>
-                {!isReadOnly && (
-                  <div className="flex gap-1 shrink-0">
-                    <button 
-                      onClick={() => openModal(emp)} 
-                      className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-neutral-800 rounded transition-colors"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button 
-                      onClick={() => onDeleteEmployee(emp.id)} 
-                      className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-slate-50 dark:hover:bg-neutral-800 rounded transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                  <div key={emp.id} className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-slate-100 dark:border-neutral-800 p-6 flex items-start space-x-4">
+                    <img
+                      src={`https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=random`}
+                      alt={emp.name}
+                      className="w-14 h-14 rounded-full object-cover border-2 border-slate-100 dark:border-neutral-700"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start mb-1">
+                        <h3 className="font-bold text-slate-800 dark:text-white text-lg truncate pr-2">{emp.name}</h3>
+                        {!isReadOnly && (
+                          <div className="flex gap-1 shrink-0">
+                            <button
+                              onClick={() => openModal(emp)}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-neutral-800 rounded transition-colors"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button
+                              onClick={() => onDeleteEmployee(emp.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-slate-50 dark:hover:bg-neutral-800 rounded transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-blue-600 dark:text-blue-400 font-medium text-sm mb-3">
+                        {emp.designation}
+                        <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${emp.role === 'admin' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'}`}>
+                          {emp.role.charAt(0).toUpperCase() + emp.role.slice(1)}
+                        </span>
+                      </p>
+
+                      <div className="space-y-1.5">
+                        {emp.email && (
+                          <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
+                            <Mail size={14} className="mr-2 opacity-70 shrink-0" />
+                            <span className="truncate">{emp.email}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
+                          <Phone size={14} className="mr-2 opacity-70" />
+                          {emp.phone}
+                        </div>
+                        {!isReadOnly && (
+                          <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
+                            <DollarSign size={14} className="mr-2 opacity-70" />
+                            ₹{emp.salary.toLocaleString()} / mo
+                          </div>
+                        )}
+                        {emp.assignedVehicle && (
+                          <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
+                            <Truck size={14} className="mr-2 opacity-70" />
+                            {emp.assignedVehicle}
+                          </div>
+                        )}
+                        <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
+                          <Calendar size={14} className="mr-2 opacity-70" />
+                          Joined {emp.joinDate}
+                        </div>
+                      </div>
+
+                      {emp.lastEditedBy && (
+                        <p className="text-xs text-slate-300 dark:text-neutral-600 mt-3 text-right">
+                          Updated by {emp.lastEditedBy}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-              <p className="text-blue-600 dark:text-blue-400 font-medium text-sm mb-3">
-                {emp.designation}
-                <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${emp.role === 'admin' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'}`}>
-                  {emp.role.charAt(0).toUpperCase() + emp.role.slice(1)}
-                </span>
-              </p>
-              
-              <div className="space-y-1.5">
-                {emp.email && (
-                  <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
-                    <Mail size={14} className="mr-2 opacity-70 shrink-0" />
-                    <span className="truncate">{emp.email}</span>
-                  </div>
-                )}
-                <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
-                  <Phone size={14} className="mr-2 opacity-70" />
-                  {emp.phone}
-                </div>
-                {!isReadOnly && (
-                  <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
-                     <DollarSign size={14} className="mr-2 opacity-70" />
-                     ₹{emp.salary.toLocaleString()} / mo
-                  </div>
-                )}
-                {emp.assignedVehicle && (
-                  <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
-                    <Truck size={14} className="mr-2 opacity-70" />
-                    {emp.assignedVehicle}
-                  </div>
-                )}
-                <div className="flex items-center text-sm text-slate-500 dark:text-neutral-400">
-                  <Calendar size={14} className="mr-2 opacity-70" />
-                  Joined {emp.joinDate}
-                </div>
-              </div>
-              
-              {emp.lastEditedBy && (
-                 <p className="text-xs text-slate-300 dark:text-neutral-600 mt-3 text-right">
-                   Updated by {emp.lastEditedBy}
-                 </p>
-              )}
-            </div>
-          </div>
                 ))}
               </div>
             </div>
@@ -165,7 +166,7 @@ export const Employees: React.FC<EmployeesProps> = ({
         </div>
       ) : (
         <div className="py-10 text-center text-slate-400 dark:text-neutral-500">
-           No employees assigned to {vehicleFilter}.
+          No employees assigned to {vehicleFilter}.
         </div>
       )}
 
@@ -182,60 +183,60 @@ export const Employees: React.FC<EmployeesProps> = ({
                   <X size={20} />
                 </button>
               </div>
-              
+
               <div className={`p-5 space-y-4 ${isReadOnly ? 'pointer-events-none opacity-90' : ''}`}>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Full Name</label>
                   <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                    value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                    value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                 </div>
 
                 <div>
-                   <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Email (for Login)</label>
-                   <input disabled={isReadOnly} type="email" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                     value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
-                </div>
-                
-                <div>
-                   <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Designation</label>
-                   <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                     value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})} />
+                  <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Email (for Login)</label>
+                  <input disabled={isReadOnly} type="email" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    value={formData.email || ''} onChange={e => setFormData({ ...formData, email: e.target.value })} />
                 </div>
 
                 <div>
-                   <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Access Role</label>
-                   <select disabled={isReadOnly} className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                      value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as 'admin' | 'staff'})}>
-                      <option value="staff">Staff</option>
-                      <option value="admin">Admin</option>
-                   </select>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Designation</label>
+                  <input disabled={isReadOnly} required type="text" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    value={formData.designation} onChange={e => setFormData({ ...formData, designation: e.target.value })} />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Access Role</label>
+                  <select disabled={isReadOnly} className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as 'admin' | 'staff' })}>
+                    <option value="staff">Staff</option>
+                    <option value="admin">Admin</option>
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                   <div>
-                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Phone</label>
-                     <input disabled={isReadOnly} required type="tel" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                       value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-                   </div>
-                   <div>
-                     <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Monthly Salary</label>
-                     <input disabled={isReadOnly} required type="number" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                       value={formData.salary} onChange={e => setFormData({...formData, salary: Number(e.target.value)})} />
-                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Phone</label>
+                    <input disabled={isReadOnly} required type="tel" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                      value={formData.phone} onChange={e => setFormData({ ...formData, phone: formatPhoneNumberInput(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Monthly Salary</label>
+                    <input disabled={isReadOnly} required type="number" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                      value={formData.salary} onChange={e => setFormData({ ...formData, salary: Number(e.target.value) })} />
+                  </div>
                 </div>
 
                 <div>
-                   <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Assigned Vehicle</label>
-                   <select disabled={isReadOnly} className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                      value={formData.assignedVehicle} onChange={e => setFormData({...formData, assignedVehicle: e.target.value})}>
-                      {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
-                   </select>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Assigned Vehicle</label>
+                  <select disabled={isReadOnly} className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    value={formData.assignedVehicle} onChange={e => setFormData({ ...formData, assignedVehicle: e.target.value })}>
+                    {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+                  </select>
                 </div>
-                
+
                 <div>
-                   <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Joining Date</label>
-                   <input disabled={isReadOnly} required type="date" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
-                     value={formData.joinDate} onChange={e => setFormData({...formData, joinDate: e.target.value})} />
+                  <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Joining Date</label>
+                  <input disabled={isReadOnly} required type="date" className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    value={formData.joinDate} onChange={e => setFormData({ ...formData, joinDate: e.target.value })} />
                 </div>
               </div>
 

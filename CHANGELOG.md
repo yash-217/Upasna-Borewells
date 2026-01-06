@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-01-06
+
+- feat: Profile page
+
 ## [0.3.0] - 2026-01-06
 
 - feat: Implement new authentication flow with `useAuth` hook and refactor types, queries, and contexts for improved structure and error handling.
