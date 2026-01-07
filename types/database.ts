@@ -37,6 +37,12 @@ export interface DBServiceRequest {
     customer_name: string;
     phone: string;
     location: string;
+    address_line1: string | null;
+    address_line2: string | null;
+    city: string | null;
+    district: string | null;
+    state: string | null;
+    pincode: string | null;
     date: string;
     type: string;
     status: string;
@@ -50,8 +56,6 @@ export interface DBServiceRequest {
     casing_type: string | null;
     casing10_depth: number;
     casing10_rate: number;
-    latitude: number | null;
-    longitude: number | null;
     items: DBServiceItem[] | null;
     last_edited_by: string | null;
     last_edited_at: string | null;

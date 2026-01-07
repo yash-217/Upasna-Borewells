@@ -152,6 +152,12 @@ export const mapRequestFromDB = (data: DBServiceRequest): ServiceRequest => ({
   customerName: data.customer_name,
   phone: data.phone,
   location: data.location,
+  addressLine1: data.address_line1 || undefined,
+  addressLine2: data.address_line2 || undefined,
+  city: data.city || undefined,
+  district: data.district || undefined,
+  state: data.state || undefined,
+  pincode: data.pincode || undefined,
   date: data.date,
   type: data.type as ServiceType,
   status: data.status as ServiceStatus,
@@ -165,39 +171,51 @@ export const mapRequestFromDB = (data: DBServiceRequest): ServiceRequest => ({
   casingType: data.casing_type || undefined,
   casing10Depth: Number(data.casing10_depth) || 0,
   casing10Rate: Number(data.casing10_rate) || 0,
-  latitude: data.latitude !== null ? Number(data.latitude) : undefined,
-  longitude: data.longitude !== null ? Number(data.longitude) : undefined,
+  // Unpack coordinates from "lat,lng" string
+  latitude: data.location.includes(',') ? Number(data.location.split(',')[0]) : undefined,
+  longitude: data.location.includes(',') ? Number(data.location.split(',')[1]) : undefined,
   items: Array.isArray(data.items) ? data.items : [],
   lastEditedBy: data.last_edited_by || undefined,
   lastEditedAt: data.last_edited_at || undefined,
   createdBy: data.created_by || undefined
 });
 
-export const mapRequestToDB = (r: Partial<ServiceRequest>): Partial<DBServiceRequest> => ({
-  customer_name: r.customerName,
-  phone: r.phone,
-  location: r.location,
-  date: safeDateToDB(r.date),
-  type: r.type,
-  status: r.status,
-  vehicle: r.vehicle,
-  notes: r.notes,
-  total_cost: safeNumber(r.totalCost),
-  drilling_depth: safeNumber(r.drillingDepth),
-  drilling_rate: safeNumber(r.drillingRate),
-  casing_depth: safeNumber(r.casingDepth),
-  casing_rate: safeNumber(r.casingRate),
-  casing_type: r.casingType || null,
-  casing10_depth: safeNumber(r.casing10Depth),
-  casing10_rate: safeNumber(r.casing10Rate),
-  latitude: r.latitude ?? null,
-  longitude: r.longitude ?? null,
-  items: r.items,
-  last_edited_by: r.lastEditedBy,
-  last_edited_at: safeTimestampToDB(r.lastEditedAt),
-  created_by: r.createdBy
-});
+export const mapRequestToDB = (r: Partial<ServiceRequest>): Partial<DBServiceRequest> => {
+  // Pack coordinates into location string "lat,lng" if available
+  let locationVal = r.location || '';
+  if (r.latitude && r.longitude) {
+    locationVal = `${r.latitude},${r.longitude}`;
+  }
 
+  return {
+    customer_name: r.customerName,
+    phone: r.phone,
+    location: locationVal,
+    address_line1: r.addressLine1 || null,
+    address_line2: r.addressLine2 || null,
+    city: r.city || null,
+    district: r.district || null,
+    state: r.state || null,
+    pincode: r.pincode || null,
+    date: safeDateToDB(r.date),
+    type: r.type,
+    status: r.status,
+    vehicle: r.vehicle,
+    notes: r.notes,
+    total_cost: safeNumber(r.totalCost),
+    drilling_depth: safeNumber(r.drillingDepth),
+    drilling_rate: safeNumber(r.drillingRate),
+    casing_depth: safeNumber(r.casingDepth),
+    casing_rate: safeNumber(r.casingRate),
+    casing_type: r.casingType || null,
+    casing10_depth: safeNumber(r.casing10Depth),
+    casing10_rate: safeNumber(r.casing10Rate),
+    items: r.items,
+    last_edited_by: r.lastEditedBy,
+    last_edited_at: safeTimestampToDB(r.lastEditedAt),
+    created_by: r.createdBy
+  };
+};
 export const mapVehicleFromDB = (data: DBVehicle): Vehicle => ({
   id: data.id,
   name: data.name,

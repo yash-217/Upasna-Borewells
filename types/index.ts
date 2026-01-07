@@ -58,6 +58,12 @@ export interface ServiceRequest extends TrackedEntity {
     customerName: string;
     phone: string;
     location: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    district?: string;
+    state?: string;
+    pincode?: string;
     date: string;
     type: ServiceType;
     status: ServiceStatus;

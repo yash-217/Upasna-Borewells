@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-01-07
+
+- feat: Fix Map implementation
+
 ## [0.3.2] - 2026-01-06
 
 - feat: Add expense update mutation, refresh UI with glassmorphism and brand colors, and introduce OCR test script.

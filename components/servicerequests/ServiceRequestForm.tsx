@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Product, ServiceRequest, ServiceStatus, ServiceType, Vehicle, User } from '../../types';
-import { Truck, MapPin, X, Loader2, Crosshair, Trash2, Navigation, Search } from 'lucide-react';
-import { useApp } from '../../contexts/AppContext';
-import { searchPlaces, hasApiKey } from '../../services/mappls';
+import { Loader2, Trash2, Navigation } from 'lucide-react';
+import { formatPhoneNumberInput } from '../../lib/formatters';
+import { reverseGeocodeStructured } from '../../services/mappls';
 
 interface ServiceRequestFormProps {
   initialData?: Partial<ServiceRequest>;
@@ -24,6 +24,12 @@ export const ServiceRequestForm: React.FC<ServiceRequestFormProps> = ({
     customerName: '',
     phone: '+91 ',
     location: '',
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    district: '',
+    state: '',
+    pincode: '',
     date: new Date().toISOString().split('T')[0],
     type: ServiceType.DRILLING,
     status: ServiceStatus.PENDING,
@@ -42,234 +48,10 @@ export const ServiceRequestForm: React.FC<ServiceRequestFormProps> = ({
     longitude: undefined
   });
 
-  // Map State
-  const [isMapOpen, setIsMapOpen] = useState(false);
-  const [pickedLocation, setPickedLocation] = useState<{ lat: number, lng: number } | null>(null);
-  const [mapSearchQuery, setMapSearchQuery] = useState('');
-  const [searchSuggestions, setSearchSuggestions] = useState<any[]>([]);
-  const [pickedAddress, setPickedAddress] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [isMapLoading, setIsMapLoading] = useState(false);
+  // Location State
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
-  const [isLocationSearching, setIsLocationSearching] = useState(false);
 
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<any>(null);
-  const markerInstance = useRef<any>(null);
-  const searchTimeoutRef = useRef<any>(null);
-  const locationSearchTimeoutRef = useRef<any>(null);
-
-  const loadMapplsScript = () => {
-    return new Promise((resolve, reject) => {
-      if (window.mappls && window.mappls.placePicker) {
-        resolve(window.mappls);
-        return;
-      }
-
-      let apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
-      if (apiKey && apiKey.startsWith('VITE_MAPPLS_API_KEY=')) {
-        apiKey = apiKey.replace('VITE_MAPPLS_API_KEY=', '');
-      }
-
-      if (!apiKey) {
-        alert("Mappls API Key is missing! Please check your .env file.");
-        reject(new Error("VITE_MAPPLS_API_KEY is missing"));
-        return;
-      }
-
-      const loadScript = (src: string) => {
-        return new Promise((res, rej) => {
-          const existingScript = document.querySelector(`script[src="${src}"]`);
-          if (existingScript) {
-            if (existingScript.getAttribute('data-loaded') === 'true') {
-              res(true);
-            } else {
-              existingScript.addEventListener('load', () => res(true));
-              existingScript.addEventListener('error', rej);
-            }
-            return;
-          }
-          const script = document.createElement('script');
-          script.src = src;
-          script.async = true;
-          script.setAttribute('data-loaded', 'false');
-          script.onload = () => {
-            script.setAttribute('data-loaded', 'true');
-            res(true);
-          };
-          script.onerror = rej;
-          document.body.appendChild(script);
-        });
-      };
-
-      loadScript(`https://sdk.mappls.com/map/sdk/web?v=3.0&access_token=${apiKey}`)
-        .then(() => loadScript(`https://sdk.mappls.com/map/sdk/plugins?v=3.0&access_token=${apiKey}`))
-        .then(() => resolve(window.mappls))
-        .catch(err => reject(err));
-    });
-  };
-
-  useEffect(() => {
-    if (isMapOpen) {
-      setTimeout(() => {
-        loadMapplsScript().then((mappls: any) => {
-          if (mapInstance.current) return;
-
-          const defaultCenter = { lat: 19.8762, lng: 75.3433 };
-          const mapObj = new mappls.Map('mappls-map-picker-form', {
-            center: defaultCenter,
-            zoom: 12,
-            zoomControl: true,
-            scrollWheel: true,
-            draggable: true,
-            clickableIcons: false
-          });
-
-          mapInstance.current = mapObj;
-          markerInstance.current = new mappls.Marker({
-            map: mapObj,
-            position: defaultCenter,
-            draggable: true
-          });
-
-          markerInstance.current.addListener('dragend', (e: any) => {
-            if (e && e.target && typeof e.target.getPosition === 'function') {
-              const pos = e.target.getPosition();
-              setPickedLocation({ lat: Number(pos.lat), lng: Number(pos.lng) });
-              fetchAddress(Number(pos.lat), Number(pos.lng));
-            }
-          });
-
-          if (mapObj && typeof mapObj.addListener === 'function') {
-            mapObj.addListener('click', (e: any) => {
-              if (e && e.lngLat) {
-                const lat = e.lngLat.lat;
-                const lng = e.lngLat.lng;
-
-                if (markerInstance.current) {
-                  markerInstance.current.setPosition({ lat, lng });
-                } else {
-                  markerInstance.current = new mappls.Marker({
-                    map: mapObj,
-                    position: { lat, lng },
-                    draggable: true
-                  });
-                  markerInstance.current.addListener('dragend', (e: any) => {
-                    if (e && e.target && typeof e.target.getPosition === 'function') {
-                      const pos = e.target.getPosition();
-                      setPickedLocation({ lat: Number(pos.lat), lng: Number(pos.lng) });
-                      fetchAddress(Number(pos.lat), Number(pos.lng));
-                    }
-                  });
-                }
-                setPickedLocation({ lat, lng });
-                fetchAddress(lat, lng);
-              }
-            });
-          }
-        }).catch(err => console.error("Failed to load Mappls:", err));
-      }, 100);
-    } else {
-      if (mapInstance.current) {
-        try {
-          mapInstance.current.remove();
-        } catch (e) { /* ignore */ }
-        mapInstance.current = null;
-      }
-    }
-  }, [isMapOpen]);
-
-  const handleConfirmLocation = () => {
-    if (pickedLocation) {
-      const updates: Partial<ServiceRequest> = {
-        latitude: pickedLocation.lat,
-        longitude: pickedLocation.lng
-      };
-
-      if (pickedAddress) {
-        updates.location = pickedAddress;
-      } else {
-        updates.location = `${pickedLocation.lat.toFixed(6)}, ${pickedLocation.lng.toFixed(6)}`;
-      }
-      setFormData({ ...formData, ...updates });
-    }
-    setIsMapOpen(false);
-  };
-
-  // Handle location input with debounced search using OAuth2 API
-  const handleLocationInputChange = (value: string) => {
-    setFormData({ ...formData, location: value });
-
-    if (locationSearchTimeoutRef.current) {
-      clearTimeout(locationSearchTimeoutRef.current);
-    }
-
-    if (!value.trim() || value.length < 3) {
-      setLocationSuggestions([]);
-      return;
-    }
-
-    // Check if OAuth credentials are configured
-    if (!hasApiKey()) {
-      // Fallback to SDK search if no OAuth credentials
-      setIsLocationSearching(true);
-      locationSearchTimeoutRef.current = setTimeout(() => {
-        loadMapplsScript().then((mappls: any) => {
-          try {
-            new mappls.search(
-              { query: value, pod: 'CITY,VILLAGE,LOCALITY,SUB_LOCALITY,POI', region: 'IND' },
-              (data: any) => {
-                setIsLocationSearching(false);
-                if (data?.suggestedLocations) {
-                  setLocationSuggestions(data.suggestedLocations.slice(0, 6));
-                } else {
-                  setLocationSuggestions([]);
-                }
-              }
-            );
-          } catch {
-            setIsLocationSearching(false);
-            setLocationSuggestions([]);
-          }
-        }).catch(() => {
-          setIsLocationSearching(false);
-          setLocationSuggestions([]);
-        });
-      }, 300);
-      return;
-    }
-
-    // Use OAuth2-based autosuggest API
-    setIsLocationSearching(true);
-    locationSearchTimeoutRef.current = setTimeout(async () => {
-      try {
-        const results = await searchPlaces(value);
-        setIsLocationSearching(false);
-        setLocationSuggestions(results);
-      } catch {
-        setIsLocationSearching(false);
-        setLocationSuggestions([]);
-      }
-    }, 300);
-  };
-
-  // Handle selecting a location suggestion
-  const handleSelectLocationSuggestion = (item: any) => {
-    const lat = parseFloat(item.latitude || item.lat);
-    const lng = parseFloat(item.longitude || item.lng);
-    const address = item.placeName || item.placeAddress || '';
-
-    setFormData({
-      ...formData,
-      location: address,
-      latitude: !isNaN(lat) ? lat : undefined,
-      longitude: !isNaN(lng) ? lng : undefined
-    });
-    setLocationSuggestions([]);
-  };
-
-  // Get current GPS location directly to form
+  // Get current GPS location and populate address fields
   const handleGetCurrentLocationForForm = () => {
     if (!navigator.geolocation) {
       showToast("Geolocation is not supported by this browser.", "error");
@@ -286,37 +68,33 @@ export const ServiceRequestForm: React.FC<ServiceRequestFormProps> = ({
         setFormData(prev => ({
           ...prev,
           latitude: lat,
-          longitude: lng,
-          location: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+          longitude: lng
         }));
 
-        // Then try to get the address
-        loadMapplsScript().then(() => {
-          if (window.mappls && window.mappls.rev_geocode) {
-            new window.mappls.rev_geocode({ lat, lng }, (data: any) => {
-              setIsGettingLocation(false);
-              let address = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-
-              if (data && Array.isArray(data) && data.length > 0) {
-                address = data[0].formatted_address || address;
-              } else if (data && data.results && Array.isArray(data.results) && data.results.length > 0) {
-                address = data.results[0].formatted_address || address;
-              }
-
-              setFormData(prev => ({
-                ...prev,
-                location: address
-              }));
-              showToast("Location detected!", "success");
-            });
+        // Get structured address using MapplsService
+        reverseGeocodeStructured(lat, lng).then((address) => {
+          setIsGettingLocation(false);
+          if (address) {
+            setFormData(prev => ({
+              ...prev,
+              addressLine1: address.addressLine1,
+              addressLine2: address.addressLine2,
+              city: address.city,
+              district: address.district,
+              state: address.state,
+              pincode: address.pincode,
+              location: address.formatted
+            }));
+            showToast("Location detected!", "success");
           } else {
-            setIsGettingLocation(false);
+            showToast("Could not retrieve address.", "info");
           }
         }).catch(() => {
           setIsGettingLocation(false);
+          showToast("Could not retrieve address.", "error");
         });
       },
-      (error) => {
+      () => {
         setIsGettingLocation(false);
         showToast("Unable to retrieve your location.", "error");
       },
@@ -324,187 +102,36 @@ export const ServiceRequestForm: React.FC<ServiceRequestFormProps> = ({
     );
   };
 
-  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value;
-    setMapSearchQuery(query);
+  // Progressive drilling rate calculation:
+  // - 0-300 ft: base rate
+  // - 301-400 ft: base rate + 10
+  // - 401-500 ft: base rate + 20, etc.
+  const calculateDrillingCost = (depth: number, baseRate: number) => {
+    if (depth <= 0 || baseRate <= 0) return 0;
 
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    let cost = 0;
+    let remainingDepth = depth;
 
-    if (!query.trim()) {
-      setSearchSuggestions([]);
-      return;
+    // First 300ft at base rate
+    const firstChunk = Math.min(remainingDepth, 300);
+    cost += firstChunk * baseRate;
+    remainingDepth -= firstChunk;
+
+    // Subsequent 100ft chunks at +10 increments
+    let currentRate = baseRate;
+    while (remainingDepth > 0) {
+      currentRate += 10;
+      const chunk = Math.min(remainingDepth, 100);
+      cost += chunk * currentRate;
+      remainingDepth -= chunk;
     }
 
-    if (window.mappls && window.mappls.search) {
-      searchTimeoutRef.current = setTimeout(() => {
-        try {
-          const searchOptions: any = {
-            q: query,
-            pod: 'City,Locality,POI'
-          };
-
-          if (pickedLocation) {
-            searchOptions.location = `${pickedLocation.lat},${pickedLocation.lng}`;
-          } else if (mapInstance.current && typeof mapInstance.current.getCenter === 'function') {
-            const center = mapInstance.current.getCenter();
-            if (center) {
-              searchOptions.location = `${center.lat},${center.lng}`;
-            }
-          }
-
-          new window.mappls.search(searchOptions, (data: any) => {
-            if (data) {
-              if (Array.isArray(data)) {
-                setSearchSuggestions(data);
-              } else if (data.suggestedLocations) {
-                setSearchSuggestions(data.suggestedLocations);
-              }
-            } else {
-              setSearchSuggestions([]);
-            }
-          });
-        } catch (e) {
-          console.error("Search error", e);
-        }
-      }, 300);
-    }
+    return cost;
   };
 
-  const handleSelectSuggestion = (item: any) => {
-    const lat = parseFloat(item.latitude || item.lat);
-    const lng = parseFloat(item.longitude || item.lng);
-
-    if (!isNaN(lat) && !isNaN(lng)) {
-      const pos = { lat, lng };
-      if (mapInstance.current) {
-        mapInstance.current.setCenter(pos);
-        mapInstance.current.setZoom(16);
-      }
-      if (markerInstance.current) {
-        markerInstance.current.setPosition(pos);
-      }
-      setPickedLocation(pos);
-      setMapSearchQuery(item.placeName || item.placeAddress || '');
-      setSearchSuggestions([]);
-      setPickedAddress(item.placeName || item.placeAddress || '');
-    }
-  };
-
-  const handleMapSearch = () => {
-    if (!mapSearchQuery.trim() || !window.mappls || !window.mappls.search) return;
-
-    setIsSearching(true);
-
-    const searchOptions: any = { q: mapSearchQuery };
-    if (pickedLocation) {
-      searchOptions.location = `${pickedLocation.lat},${pickedLocation.lng}`;
-    } else if (mapInstance.current && typeof mapInstance.current.getCenter === 'function') {
-      const center = mapInstance.current.getCenter();
-      if (center) {
-        searchOptions.location = `${center.lat},${center.lng}`;
-      }
-    }
-
-    new window.mappls.search(searchOptions, (data: any) => {
-      setIsSearching(false);
-      let results: any[] = [];
-      if (data) {
-        if (Array.isArray(data)) {
-          results = data;
-        } else if (data.suggestedLocations) {
-          results = data.suggestedLocations;
-        }
-      }
-
-      const validResult = results.find(r => {
-        const lat = parseFloat(r.latitude || r.lat || r.entryLatitude);
-        const lng = parseFloat(r.longitude || r.lng || r.entryLongitude);
-        return !isNaN(lat) && !isNaN(lng);
-      });
-
-      if (validResult) {
-        const lat = parseFloat(validResult.latitude || validResult.lat || validResult.entryLatitude);
-        const lng = parseFloat(validResult.longitude || validResult.lng || validResult.entryLongitude);
-
-        const pos = { lat, lng };
-        if (mapInstance.current) {
-          mapInstance.current.setCenter(pos);
-          mapInstance.current.setZoom(16);
-        }
-        if (markerInstance.current) {
-          markerInstance.current.setPosition(pos);
-        }
-        setPickedLocation(pos);
-        setPickedAddress(validResult.placeName || validResult.placeAddress || '');
-        setSearchSuggestions([]);
-      } else {
-        showToast("Location not found or invalid coordinates.", "error");
-      }
-    });
-  };
-
-  const handleCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          const pos = { lat, lng };
-
-          if (mapInstance.current) {
-            mapInstance.current.setCenter(pos);
-            mapInstance.current.setZoom(16);
-          }
-          if (markerInstance.current) {
-            markerInstance.current.setPosition(pos);
-          }
-          setPickedLocation(pos);
-          fetchAddress(lat, lng);
-        },
-        (error) => {
-          console.error("Error getting location:", error);
-          showToast("Unable to retrieve your location.", "error");
-        }
-      );
-    } else {
-      showToast("Geolocation is not supported by this browser.", "error");
-    }
-  };
-
-  const fetchAddress = (lat: number, lng: number) => {
-    if (window.mappls && window.mappls.rev_geocode) {
-      try {
-        new window.mappls.rev_geocode({ lat, lng }, (data: any) => {
-          if (data && Array.isArray(data) && data.length > 0) {
-            setPickedAddress(data[0].formatted_address);
-          } else if (data && data.results && Array.isArray(data.results) && data.results.length > 0) {
-            setPickedAddress(data.results[0].formatted_address);
-          } else {
-            setPickedAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-          }
-        });
-      } catch (e) {
-        console.error("Reverse geocode error", e);
-      }
-    }
-  };
-
-  const highlightMatch = (text: string, query: string) => {
-    if (!query || !text) return text;
-    const cleanQuery = query.trim();
-    if (!cleanQuery) return text;
-    const escapedQuery = cleanQuery.replace(/[.*+?^${}()|[\\]/g, '\\$&');
-    const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
-    return parts.map((part, i) =>
-      part.toLowerCase() === cleanQuery.toLowerCase() ?
-        <span key={i} className="text-blue-600 dark:text-blue-400 font-bold">{part}</span> : part
-    );
-  };
-
-  // Calculations
   const calculateTotal = (data: typeof formData) => {
     const itemsTotal = (data.items || []).reduce((sum, item) => sum + (item.quantity * item.priceAtTime), 0);
-    const drillingTotal = (data.drillingDepth || 0) * (data.drillingRate || 0);
+    const drillingTotal = calculateDrillingCost(data.drillingDepth || 0, data.drillingRate || 0);
     const casingTotal = (data.casingDepth || 0) * (data.casingRate || 0);
     const casing10Total = (data.casing10Depth || 0) * (data.casing10Rate || 0);
     return itemsTotal + drillingTotal + casingTotal + casing10Total;
@@ -603,69 +230,79 @@ export const ServiceRequestForm: React.FC<ServiceRequestFormProps> = ({
               value={formData.phone} onChange={e => setFormData({ ...formData, phone: formatPhoneNumberInput(e.target.value) })} />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Location</label>
-            <div className="flex gap-2 relative">
-              <div className="flex-1 relative">
-                <input
-                  disabled={isReadOnly}
-                  required
-                  type="text"
-                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 pr-10 text-sm text-slate-900 dark:text-white"
-                  value={formData.location}
-                  onChange={(e) => handleLocationInputChange(e.target.value)}
-                  placeholder="Search or enter address..."
-                />
-                {isLocationSearching && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Loader2 size={16} className="animate-spin text-slate-400" />
-                  </div>
-                )}
-                {/* Location Suggestions Dropdown */}
-                {locationSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-lg shadow-lg max-h-60 overflow-y-auto z-50">
-                    {locationSuggestions.map((item, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => handleSelectLocationSuggestion(item)}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-neutral-800 text-slate-700 dark:text-neutral-200 border-b border-slate-100 dark:border-neutral-800 last:border-0"
-                      >
-                        <div className="font-medium">{item.placeName || item.placeAddress}</div>
-                        {item.placeAddress && item.placeName !== item.placeAddress && (
-                          <div className="text-xs text-slate-500 dark:text-neutral-400 truncate">{item.placeAddress}</div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300">Address</label>
               {!isReadOnly && (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleGetCurrentLocationForForm}
-                    disabled={isGettingLocation}
-                    className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white border border-blue-600 rounded-lg transition-colors disabled:opacity-60"
-                    title="Get Current Location"
-                  >
-                    {isGettingLocation ? <Loader2 size={18} className="animate-spin" /> : <Navigation size={18} />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsMapOpen(true)}
-                    className="px-3 py-2 bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-neutral-700 rounded-lg hover:bg-slate-200 dark:hover:bg-neutral-700 transition-colors"
-                    title="Pick on Map"
-                  >
-                    <MapPin size={18} />
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={handleGetCurrentLocationForForm}
+                  disabled={isGettingLocation}
+                  className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2 text-sm"
+                  title="Get Current Location"
+                >
+                  {isGettingLocation ? <Loader2 size={16} className="animate-spin" /> : <Navigation size={16} />}
+                  <span className="font-medium">GPS</span>
+                </button>
               )}
             </div>
-            {formData.latitude && formData.longitude && (
-              <p className="text-xs text-slate-500 dark:text-neutral-400 mt-1">
-                📍 Coordinates: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
-              </p>
-            )}
+            <div className="space-y-3">
+              <div>
+                <input
+                  disabled={isReadOnly}
+                  type="text"
+                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  value={formData.addressLine1 || ''}
+                  onChange={(e) => setFormData({ ...formData, addressLine1: e.target.value })}
+                  placeholder="Address Line 1 (Building, Street)"
+                />
+              </div>
+              <div>
+                <input
+                  disabled={isReadOnly}
+                  type="text"
+                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  value={formData.addressLine2 || ''}
+                  onChange={(e) => setFormData({ ...formData, addressLine2: e.target.value })}
+                  placeholder="Address Line 2 (Area, Landmark)"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  disabled={isReadOnly}
+                  type="text"
+                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  value={formData.city || ''}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  placeholder="City"
+                />
+                <input
+                  disabled={isReadOnly}
+                  type="text"
+                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  value={formData.district || ''}
+                  onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                  placeholder="District"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  disabled={isReadOnly}
+                  type="text"
+                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  value={formData.state || ''}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                  placeholder="State"
+                />
+                <input
+                  disabled={isReadOnly}
+                  type="text"
+                  className="w-full bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  value={formData.pincode || ''}
+                  onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                  placeholder="Pincode"
+                />
+              </div>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-neutral-300 mb-1">Service Type</label>
@@ -705,13 +342,13 @@ export const ServiceRequestForm: React.FC<ServiceRequestFormProps> = ({
                 value={formData.drillingDepth || ''} onChange={e => handleDrillingChange(Number(e.target.value), formData.drillingRate || 0)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Rate (₹/ft)</label>
+              <label className="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Base Rate (₹/ft)</label>
               <input disabled={isReadOnly} type="number" min="0" placeholder="0" className="w-full bg-white dark:bg-black border border-blue-200 dark:border-blue-800/50 rounded-lg px-3 py-2 text-sm dark:text-white"
                 value={formData.drillingRate || ''} onChange={e => handleDrillingChange(formData.drillingDepth || 0, Number(e.target.value))} />
             </div>
           </div>
           <div className="mt-2 text-right text-sm text-blue-700 dark:text-blue-400 font-medium">
-            Drilling Total: ₹{((formData.drillingDepth || 0) * (formData.drillingRate || 0)).toLocaleString()}
+            Drilling Total: ₹{calculateDrillingCost(formData.drillingDepth || 0, formData.drillingRate || 0).toLocaleString()}
           </div>
         </div>
 
@@ -846,88 +483,6 @@ export const ServiceRequestForm: React.FC<ServiceRequestFormProps> = ({
           )}
         </div>
       </form>
-
-      {/* Map Picker Modal */}
-      {isMapOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-3xl h-[500px] flex flex-col animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-neutral-800">
-            <div className="p-4 border-b border-slate-100 dark:border-neutral-800 flex justify-between items-center bg-white dark:bg-neutral-900 rounded-t-xl">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white">Pick Location</h3>
-              <div className="flex items-center gap-2">
-                {pickedLocation && (
-                  <button onClick={handleConfirmLocation} type="button" className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors">
-                    Confirm
-                  </button>
-                )}
-                <button onClick={() => setIsMapOpen(false)} type="button" className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"><X size={24} /></button>
-              </div>
-            </div>
-
-            <div className="p-2 border-b border-slate-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex gap-2 relative z-10">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  placeholder="Search for a place..."
-                  className="w-full bg-slate-100 dark:bg-neutral-800 border-none rounded-lg pl-4 pr-10 py-2 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white"
-                  value={mapSearchQuery}
-                  onChange={handleSearchInputChange}
-                  onKeyDown={(e) => e.key === 'Enter' && handleMapSearch()}
-                />
-                {mapSearchQuery && (
-                  <button
-                    onClick={() => {
-                      setMapSearchQuery('');
-                      setSearchSuggestions([]);
-                      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-                    }}
-                    type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-neutral-300 p-1"
-                  >
-                    <X size={16} />
-                  </button>
-                )}
-                {searchSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-lg shadow-lg max-h-60 overflow-y-auto z-50">
-                    {searchSuggestions.map((item, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => handleSelectSuggestion(item)}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-neutral-800 text-slate-700 dark:text-neutral-200 border-b border-slate-100 dark:border-neutral-800 last:border-0"
-                      >
-                        <div className="font-medium">{highlightMatch(item.placeName, mapSearchQuery)}</div>
-                        <div className="text-xs text-slate-500 dark:text-neutral-400 truncate">{highlightMatch(item.placeAddress, mapSearchQuery)}</div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <button type="button" onClick={handleMapSearch} disabled={isSearching} className="bg-slate-200 dark:bg-neutral-700 text-slate-700 dark:text-neutral-200 px-4 py-2 rounded-lg text-sm font-medium min-w-[80px] flex justify-center items-center disabled:opacity-70">
-                {isSearching ? <Loader2 size={18} className="animate-spin" /> : 'Search'}
-              </button>
-              <button type="button" onClick={handleCurrentLocation} className="bg-slate-200 dark:bg-neutral-700 text-slate-700 dark:text-neutral-200 px-3 py-2 rounded-lg text-sm font-medium" title="Use Current Location">
-                <Crosshair size={20} />
-              </button>
-            </div>
-
-            <div className="flex-1 relative bg-slate-100 dark:bg-neutral-800">
-              <div id="mappls-map-picker-form" ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
-              {!mapInstance.current && (
-                <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-neutral-400">
-                  Loading Map...
-                </div>
-              )}
-            </div>
-
-            <div className="p-3 bg-white dark:bg-neutral-900 border-t border-slate-100 dark:border-neutral-800 rounded-b-xl z-10 relative">
-              <p className="text-sm text-slate-700 dark:text-neutral-300 truncate flex items-center gap-2">
-                <MapPin size={16} className="text-blue-600 shrink-0" />
-                {pickedAddress || (pickedLocation ? `${pickedLocation.lat.toFixed(6)}, ${pickedLocation.lng.toFixed(6)}` : 'No location selected')}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };
