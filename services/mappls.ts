@@ -66,7 +66,6 @@ async function ensureMapplsSdkLoaded(): Promise<boolean> {
 
         // Create callback
         (window as any).mapplsCallback = () => {
-            console.log('Mappls SDK loaded successfully');
             resolve();
         };
 
@@ -189,7 +188,6 @@ export async function reverseGeocodeStructured(lat: number, lng: number): Promis
     try {
         // Use the correct reverse geocode endpoint
         const url = `https://search.mappls.com/search/address/rev-geocode?lat=${lat}&lng=${lng}&access_token=${apiKey}`;
-        console.log('Reverse geocode URL:', url.replace(apiKey, 'API_KEY_HIDDEN'));
 
         const response = await fetch(url);
 
@@ -199,7 +197,6 @@ export async function reverseGeocodeStructured(lat: number, lng: number): Promis
         }
 
         const data = await response.json();
-        console.log('Reverse geocode response:', data);
 
         // Parse the response - handle different possible formats
         let result: any = null;

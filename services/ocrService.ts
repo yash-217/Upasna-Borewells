@@ -5,12 +5,31 @@ const apiKey = import.meta.env.VITE_PUBLIC_GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(apiKey);
 
 export interface OCRResult {
-    date: string;
-    amount: string;
-    recipient: string;
-    expense_type: 'Fuel' | 'Maintenance' | 'Salary' | 'Miscellaneous';
+    date?: string;
+    amount?: string;
+    recipient?: string;
+    expense_type?: 'Fuel' | 'Maintenance' | 'Salary' | 'Miscellaneous';
     raw_text?: string;
     confidence?: number;
+}
+
+export interface ServiceRequestOCRResult {
+    customerName?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    date?: string;
+    notes?: string;
+    // Drilling details
+    drillingDepth?: number;
+    drillingRate?: number; // Base rate (first 300ft)
+    // Casing details
+    casingDepth?: number;   // 7" casing
+    casingRate?: number;
+    casing10Depth?: number; // 10" casing
+    casing10Rate?: number;
+    // Products/Items
+    items?: Array<{ name: string; price: number }>;
 }
 
 /**
@@ -99,7 +118,7 @@ IMPORTANT: Return ONLY valid JSON in this exact format, no markdown, no explanat
             date: parsed.date || '',
             amount: parsed.amount?.toString().replace(/[^0-9.]/g, '') || '',
             recipient: parsed.recipient || '',
-            expense_type: ['Fuel', 'Maintenance', 'Salary', 'Miscellaneous'].includes(parsed.expense_type)
+            expense_type: (parsed.expense_type && ['Fuel', 'Maintenance', 'Salary', 'Miscellaneous'].includes(parsed.expense_type))
                 ? parsed.expense_type
                 : 'Miscellaneous',
             raw_text: cleanedText
@@ -132,5 +151,61 @@ Return ONLY the transcribed text, preserving line breaks where appropriate. Do n
  * Check if Gemini API is available
  */
 export const isGeminiAvailable = (): boolean => {
-    return !!import.meta.env.VITE_PUBLIC_GEMINI_API_KEY;
+    return !!apiKey;
+};
+
+export const scanServiceRequestWithGemini = async (file: File): Promise<ServiceRequestOCRResult> => {
+    if (!apiKey) throw new Error('Gemini API Key is missing');
+
+    const base64Data = await fileToBase64(file);
+
+    const prompt = `
+      Analyze this handwritten service request / invoice image.
+      Extract ALL available information:
+
+      1. Customer Details:
+         - customerName: Full name
+         - phone: Phone number (digits only)
+         - address: Location or address
+         - date: Date in YYYY-MM-DD format
+
+      2. Drilling Details (look for depth ranges and rates per ft):
+         - drillingDepth: Total drilling depth in feet if mentioned (often unknown, use 0)
+         - drillingRate: Base rate per foot for first 300ft (e.g., 70)
+
+      3. Casing Pipe RATES (numbers after 7" or 10" are RATES per ft, not depths):
+         - casingRate: 7" casing rate per foot (e.g., "7\" x 250" means rate is 250)
+         - casing10Rate: 10" casing rate per foot (e.g., "10\" x 600" means rate is 600)
+         Note: casingDepth and casing10Depth are usually unknown, set to 0.
+
+      4. Products/Items (motors, pumps, complete sets, etc.):
+         - items: Array of {name, price} for each product mentioned
+
+      Return ONLY valid JSON:
+      {
+        "customerName": "",
+        "phone": "",
+        "address": "",
+        "date": "",
+        "drillingDepth": 0,
+        "drillingRate": 0,
+        "casingDepth": 0,
+        "casingRate": 0,
+        "casing10Depth": 0,
+        "casing10Rate": 0,
+        "items": [{"name": "", "price": 0}],
+        "notes": ""
+      }
+    `;
+
+    // Use the same robust retry/fallback mechanism
+    const responseText = await generateWithRetry(base64Data, prompt, file.type || 'image/jpeg');
+
+    try {
+        const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(cleanedText) as ServiceRequestOCRResult;
+    } catch (e) {
+        console.error('Failed to parse Gemini response:', e);
+        return {};
+    }
 };

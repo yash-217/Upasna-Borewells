@@ -203,6 +203,7 @@ export default function App() {
                     vehicles={vehicles}
                     currentUser={currentUser}
                     onAddRequest={handleAddRequest}
+                    onAddProduct={handleAddProduct}
                     onCancel={() => setCurrentView(View.REQUESTS)}
                     showToast={showToast}
                   />

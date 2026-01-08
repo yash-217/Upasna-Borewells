@@ -1,6 +1,5 @@
 import React, { useState, ChangeEvent, useEffect } from 'react';
-import Tesseract from 'tesseract.js';
-import { Trash2, Search, X, Plus, Truck, Upload, Calendar, DollarSign, FileText, Wrench, FileSpreadsheet, User as UserIcon, Edit2 } from 'lucide-react';
+import { Trash2, Search, X, Truck, Calendar, DollarSign, FileText, Wrench, FileSpreadsheet, User as UserIcon, Edit2 } from 'lucide-react';
 import { Vehicle, Employee, User } from '../../types';
 
 export interface Expense {
@@ -31,15 +30,7 @@ interface ExpensesProps {
 }
 
 export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, employees, currentUser, onAdd, onUpdate, onDelete, isReadOnly, vehicleFilter, onResetFilters }) => {
-  // Form State
-  const [date, setDate] = useState('');
-  const [amount, setAmount] = useState('');
-  const [type, setType] = useState<Expense['type']>('Fuel');
-  const [description, setDescription] = useState('');
-  const [vehicle, setVehicle] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [ocrStatus, setOcrStatus] = useState('');
-  const [showAddForm, setShowAddForm] = useState(false);
+  // UI State
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
@@ -58,92 +49,6 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, employee
       setEmployeeFilter('All');
     }
   }, [currentUser]);
-
-  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsProcessing(true);
-    setOcrStatus('Initializing OCR...');
-
-    try {
-      setOcrStatus('Recognizing text...');
-      const result = await Tesseract.recognize(
-        file,
-        'eng',
-        {
-          logger: m => {
-            if (m.status === 'recognizing text') {
-              setOcrStatus(`Processing: ${Math.round(m.progress * 100)}%`);
-            }
-          }
-        }
-      );
-
-      const text = result.data.text;
-      parseReceiptText(text);
-      setOcrStatus('Done!');
-    } catch (err) {
-      console.error(err);
-      setOcrStatus('Error processing image.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Basic heuristic to find dates and money in OCR text
-  const parseReceiptText = (text: string) => {
-    // Look for date (YYYY-MM-DD or DD/MM/YYYY)
-    // This is a simple regex, real-world receipt parsing is complex
-    const dateRegex = /(\d{4}-\d{2}-\d{2})|(\d{2}\/\d{2}\/\d{4})/;
-    const dateMatch = text.match(dateRegex);
-
-    // Look for currency (e.g., 10.99)
-    const amountRegex = /(\d+\.\d{2})/;
-    const amountMatch = text.match(amountRegex);
-
-    if (dateMatch) {
-      // Normalize date if needed, for now just taking the match
-      // In a real app, you'd parse this into YYYY-MM-DD for the input
-      console.log('Found date:', dateMatch[0]);
-      // Simple attempt to format for input type="date" if it matches YYYY-MM-DD
-      if (dateMatch[0].match(/^\d{4}-\d{2}-\d{2}$/)) {
-        setDate(dateMatch[0]);
-      }
-    }
-
-    if (amountMatch) {
-      setAmount(amountMatch[0]);
-    }
-
-    // Default description to a snippet of the text
-    setDescription(`Receipt scan: ${text.substring(0, 20).replace(/\n/g, ' ')}...`);
-  };
-
-  const handleAddExpense = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!date || !amount) return;
-
-    const newExpense: Expense = {
-      id: Date.now().toString(),
-      date,
-      type: type,
-      amount: parseFloat(amount),
-      description,
-      vehicle: vehicle || undefined,
-      last_edited_by: currentUser.name,
-      last_edited_at: new Date().toISOString()
-    };
-
-    onAdd(newExpense);
-    // Reset form
-    setDate('');
-    setAmount('');
-    setDescription('');
-    setVehicle('');
-    setOcrStatus('');
-    setShowAddForm(false);
-  };
 
   const handleCsvImport = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

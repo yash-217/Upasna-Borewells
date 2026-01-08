@@ -21,7 +21,6 @@ export const CreateExpense: React.FC<CreateExpenseProps> = ({ vehicles, onAdd, o
   const [vehicle, setVehicle] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [ocrStatus, setOcrStatus] = useState('');
-  // const [useGemini, setUseGemini] = useState(isGeminiAvailable()); // Removed toggle state
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
