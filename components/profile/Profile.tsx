@@ -101,54 +101,51 @@ export const Profile: React.FC<ProfileProps> = ({
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-black">
-            {/* Header */}
-            <div className="sticky top-0 z-10 bg-white dark:bg-neutral-900 border-b border-slate-200 dark:border-neutral-800 px-4 py-4">
-                <div className="flex items-center justify-between max-w-2xl mx-auto">
-                    <button
-                        onClick={() => setCurrentView(View.HOME)}
-                        className="flex items-center gap-2 text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white transition-colors"
-                    >
-                        <ArrowLeft size={20} />
-                        <span className="font-medium">Back</span>
-                    </button>
 
-                    {isEditing ? (
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={handleCancel}
-                                className="p-2 text-slate-500 hover:text-slate-700 dark:text-neutral-400 dark:hover:text-white transition-colors"
-                            >
-                                <X size={20} />
-                            </button>
-                            <button
-                                onClick={handleSave}
-                                disabled={isSaving || !hasChanges}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                                {isSaving ? (
-                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                ) : (
-                                    <Check size={18} />
-                                )}
-                                <span>Save</span>
-                            </button>
-                        </div>
-                    ) : (
-                        <button
-                            onClick={() => setIsEditing(true)}
-                            className="flex items-center gap-2 px-4 py-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                        >
-                            <Pencil size={18} />
-                            <span>Edit</span>
-                        </button>
-                    )}
-                </div>
-            </div>
 
             <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
                 {/* Profile Photo & Basic Info */}
-                <div className="bg-white dark:bg-neutral-900 rounded-2xl p-6 border border-slate-200 dark:border-neutral-800">
-                    <div className="flex flex-col items-center text-center">
+                <div className="bg-white dark:bg-neutral-900 rounded-2xl p-6 border border-slate-200 dark:border-neutral-800 relative">
+                    {/* Floating Buttons */}
+                    <div className="absolute top-4 left-4 right-4 flex justify-between items-center">
+                        <button
+                            onClick={() => setCurrentView(View.HOME)}
+                            className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800 rounded-full transition-all"
+                        >
+                            <ArrowLeft size={20} />
+                        </button>
+
+                        {isEditing ? (
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleCancel}
+                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-full transition-all"
+                                >
+                                    <X size={20} />
+                                </button>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={isSaving || !hasChanges}
+                                    className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-50 transition-all shadow-md"
+                                >
+                                    {isSaving ? (
+                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        <Check size={20} />
+                                    )}
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => setIsEditing(true)}
+                                className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all"
+                            >
+                                <Pencil size={20} />
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col items-center text-center mt-4">
                         <div className="w-24 h-24 rounded-full bg-slate-200 dark:bg-neutral-800 overflow-hidden border-4 border-white dark:border-neutral-700 shadow-lg mb-4">
                             {currentUser.photoURL ? (
                                 <img src={currentUser.photoURL} alt="Profile" className="w-full h-full object-cover" />

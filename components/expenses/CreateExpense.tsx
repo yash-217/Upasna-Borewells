@@ -1,8 +1,9 @@
 import React, { useState, ChangeEvent } from 'react';
 import Tesseract from 'tesseract.js';
-import { Truck, Upload, Plus, FileSpreadsheet } from 'lucide-react';
+import { Truck, Upload, Plus, FileSpreadsheet, Sparkles } from 'lucide-react';
 import { Vehicle } from '../../types';
 import { Expense } from './Expenses';
+import { scanReceiptWithGemini, isGeminiAvailable } from '../../services/ocrService';
 
 interface CreateExpenseProps {
   vehicles: Vehicle[];
@@ -20,16 +21,37 @@ export const CreateExpense: React.FC<CreateExpenseProps> = ({ vehicles, onAdd, o
   const [vehicle, setVehicle] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [ocrStatus, setOcrStatus] = useState('');
+  // const [useGemini, setUseGemini] = useState(isGeminiAvailable()); // Removed toggle state
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsProcessing(true);
-    setOcrStatus('Initializing OCR...');
 
+    // Try Gemini Vision first if available
+    if (isGeminiAvailable()) {
+      try {
+        setOcrStatus('🚀 Processing with Gemini AI...');
+        const result = await scanReceiptWithGemini(file);
+
+        if (result.date) setDate(result.date);
+        if (result.amount) setAmount(result.amount);
+        if (result.expense_type) setType(result.expense_type);
+        if (result.recipient) setDescription(result.recipient);
+
+        setOcrStatus('✅ Done! Fields auto-filled.');
+        setIsProcessing(false);
+        return;
+      } catch (err) {
+        console.error('Gemini OCR failed, falling back to Tesseract:', err);
+        setOcrStatus('Gemini failed, trying Tesseract...');
+      }
+    }
+
+    // Fallback to Tesseract.js
     try {
-      setOcrStatus('Recognizing text...');
+      setOcrStatus('Recognizing text with Tesseract...');
       const result = await Tesseract.recognize(
         file,
         'eng',
@@ -141,7 +163,10 @@ export const CreateExpense: React.FC<CreateExpenseProps> = ({ vehicles, onAdd, o
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!date || !amount) return;
+
+    if (!date || !amount) {
+      return;
+    }
 
     const newExpense: Expense = {
       id: Date.now().toString(),
@@ -203,27 +228,40 @@ export const CreateExpense: React.FC<CreateExpenseProps> = ({ vehicles, onAdd, o
         Create New Expense
       </h3>
 
-      <div className="mb-6 p-4 bg-slate-50 dark:bg-black rounded-lg border border-dashed border-slate-300 dark:border-neutral-700 flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex-1 w-full">
-          <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-neutral-400 mb-2">
-            <Upload size={16} />
-            Upload Receipt (Auto-fill)
-          </label>
-          <input type="file" accept="image/*" onChange={handleFileUpload} disabled={isProcessing} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/30 dark:file:text-blue-400" />
-          {ocrStatus && <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 animate-pulse">{ocrStatus}</p>}
-        </div>
+      <div className="mb-6 p-4 bg-slate-50 dark:bg-black rounded-lg border border-dashed border-slate-300 dark:border-neutral-700">
+        {/* AI Toggle Removed */}
 
-        <div className="flex-1 w-full border-l border-slate-200 dark:border-neutral-800 pl-4">
-          <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-neutral-400 mb-2">
-            <FileSpreadsheet size={16} /> Bulk Import
-          </label>
-          <input type="file" id="csv-upload-page" accept=".csv" className="hidden" onChange={handleCsvImport} />
-          <label
-            htmlFor="csv-upload-page"
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-lg text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer text-sm font-medium"
-          >
-            Upload CSV
-          </label>
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className="flex-1 w-full">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-neutral-400 mb-2">
+              {isGeminiAvailable() ? (
+                <>
+                  <Sparkles size={16} className="text-purple-500" />
+                  Upload Receipt (AI Auto-fill)
+                </>
+              ) : (
+                <>
+                  <Upload size={16} />
+                  Upload Receipt (Auto-fill)
+                </>
+              )}
+            </label>
+            <input type="file" accept="image/*" onChange={handleFileUpload} disabled={isProcessing} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/30 dark:file:text-blue-400" />
+            {ocrStatus && <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 animate-pulse">{ocrStatus}</p>}
+          </div>
+
+          <div className="flex-1 w-full border-l border-slate-200 dark:border-neutral-800 pl-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-neutral-400 mb-2">
+              <FileSpreadsheet size={16} /> Bulk Import
+            </label>
+            <input type="file" id="csv-upload-page" accept=".csv" className="hidden" onChange={handleCsvImport} />
+            <label
+              htmlFor="csv-upload-page"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-lg text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer text-sm font-medium"
+            >
+              Upload CSV
+            </label>
+          </div>
         </div>
       </div>
 

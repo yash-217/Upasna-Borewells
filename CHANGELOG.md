@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-01-08
+
+- fix: ocr implementation with Gemini
+
 ## [0.3.3] - 2026-01-07
 
 - feat: Fix Map implementation
