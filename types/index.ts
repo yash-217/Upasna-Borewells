@@ -58,6 +58,12 @@ export interface ServiceRequest extends TrackedEntity {
     customerName: string;
     phone: string;
     location: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    district?: string;
+    state?: string;
+    pincode?: string;
     date: string;
     type: ServiceType;
     status: ServiceStatus;
@@ -111,8 +117,14 @@ export interface Expense extends TrackedEntity {
 export interface User {
     name: string;
     email: string;
+    phone?: string;
     photoURL?: string;
     isGuest?: boolean;
     role?: 'admin' | 'staff';
     employeeId?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
 }

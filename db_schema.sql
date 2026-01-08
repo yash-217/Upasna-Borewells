@@ -35,7 +35,13 @@ create table public.service_requests (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   customer_name text not null,
   phone text,
-  location text,
+  location text, -- Stores "lat,lng" coordinates
+  address_line1 text,
+  address_line2 text,
+  city text,
+  district text,
+  state text,
+  pincode text,
   date date default current_date,
   type text not null, -- 'Drilling', 'Repair'
   status text default 'Pending',

@@ -181,6 +181,51 @@ export const useAppMutations = ({ queryClient, currentUser, showToast }: UseAppM
     onError: createErrorHandler('deleteExpense', ErrorMessages.expense.delete, showToast)
   });
 
+  const updateExpenseMutation = useMutation({
+    mutationFn: async (exp: Expense) => {
+      const { id, ...rest } = exp;
+      const dbData = {
+        ...rest,
+        last_edited_by: currentUser?.name,
+        last_edited_at: new Date().toISOString()
+      };
+      const { error } = await supabase.from('expenses').update(dbData).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      showToast('Expense updated successfully', 'success');
+    },
+    onError: createErrorHandler('updateExpense', 'Failed to update expense', showToast)
+  });
+
+  // User Profile Update
+  const updateUserProfileMutation = useMutation({
+    mutationFn: async (updates: Partial<User>) => {
+      if (!currentUser?.employeeId) throw new Error('No employee ID found');
+
+      const { error } = await supabase
+        .from('employees')
+        .update({
+          name: updates.name,
+          phone: updates.phone,
+          address_line1: updates.addressLine1,
+          address_line2: updates.addressLine2,
+          city: updates.city,
+          state: updates.state,
+          pincode: updates.pincode,
+        })
+        .eq('id', currentUser.employeeId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      showToast('Profile updated successfully', 'success');
+    },
+    onError: createErrorHandler('updateUserProfile', 'Failed to update profile', showToast)
+  });
+
   return useMemo(() => ({
     addRequest: addRequestMutation.mutate,
     updateRequest: updateRequestMutation.mutate,
@@ -192,7 +237,9 @@ export const useAppMutations = ({ queryClient, currentUser, showToast }: UseAppM
     updateEmployee: updateEmployeeMutation.mutate,
     deleteEmployee: deleteEmployeeMutation.mutate,
     addExpense: addExpenseMutation.mutate,
+    updateExpense: updateExpenseMutation.mutate,
     deleteExpense: deleteExpenseMutation.mutate,
+    updateUserProfile: updateUserProfileMutation.mutateAsync,
     // Expose loading states for UI feedback
     isLoading: {
       addRequest: addRequestMutation.isPending,
@@ -205,7 +252,9 @@ export const useAppMutations = ({ queryClient, currentUser, showToast }: UseAppM
       updateEmployee: updateEmployeeMutation.isPending,
       deleteEmployee: deleteEmployeeMutation.isPending,
       addExpense: addExpenseMutation.isPending,
+      updateExpense: updateExpenseMutation.isPending,
       deleteExpense: deleteExpenseMutation.isPending,
+      updateUserProfile: updateUserProfileMutation.isPending,
     },
   }), [
     addRequestMutation.mutate,
@@ -219,6 +268,7 @@ export const useAppMutations = ({ queryClient, currentUser, showToast }: UseAppM
     deleteEmployeeMutation.mutate,
     addExpenseMutation.mutate,
     deleteExpenseMutation.mutate,
+    updateUserProfileMutation.mutateAsync,
     addRequestMutation.isPending,
     updateRequestMutation.isPending,
     deleteRequestMutation.isPending,
@@ -230,5 +280,6 @@ export const useAppMutations = ({ queryClient, currentUser, showToast }: UseAppM
     deleteEmployeeMutation.isPending,
     addExpenseMutation.isPending,
     deleteExpenseMutation.isPending,
+    updateUserProfileMutation.isPending,
   ]);
 };

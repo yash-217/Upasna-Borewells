@@ -16,34 +16,39 @@ export const useAuth = (): UseAuthReturn => {
     const [isAuthLoading, setIsAuthLoading] = useState(true);
 
     /**
-     * Get employee role from database.
-     * Note: Employee record is created automatically by the DB trigger 
-     * `on_auth_user_created` when a new user signs up. This function
-     * only fetches the existing role - no duplicate creation logic.
+     * Get employee details from database.
      */
-    const getEmployeeRole = useCallback(async (email: string | null | undefined): Promise<'admin' | 'staff'> => {
-        if (!email) return 'staff';
+    const getEmployeeDetails = useCallback(async (email: string | null | undefined) => {
+        if (!email) return null;
 
         const { data: employee } = await supabase
             .from('employees')
-            .select('role')
+            .select('id, role, phone, address_line1, address_line2, city, state, pincode')
             .eq('email', email)
             .single();
 
-        return (employee?.role as 'admin' | 'staff') ?? 'staff';
+        return employee;
     }, []);
 
     // Create user object from Supabase session
     const createUserFromSession = useCallback(async (session: { user: { email?: string | null; user_metadata: { full_name?: string; avatar_url?: string } } }) => {
-        const role = await getEmployeeRole(session.user.email);
+        const employee = await getEmployeeDetails(session.user.email);
+
         return {
             name: session.user.user_metadata.full_name || 'User',
             email: session.user.email || '',
             photoURL: session.user.user_metadata.avatar_url,
             isGuest: false,
-            role
+            role: (employee?.role as 'admin' | 'staff') ?? 'staff',
+            employeeId: employee?.id,
+            phone: employee?.phone,
+            addressLine1: employee?.address_line1,
+            addressLine2: employee?.address_line2,
+            city: employee?.city,
+            state: employee?.state,
+            pincode: employee?.pincode,
         };
-    }, [getEmployeeRole]);
+    }, [getEmployeeDetails]);
 
     // Initialize auth state
     useEffect(() => {

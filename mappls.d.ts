@@ -1,32 +1,39 @@
 // Mappls SDK Type Definitions
-// See: https://www.mappls.com/api/web-sdk/vector-map-v2
+// Extends the types from mappls-web-maps package
+
+// Re-export types from mappls-web-maps
+export { mappls, mappls_plugin } from 'mappls-web-maps';
 
 declare global {
   interface Window {
-    mappls?: MapplsSDK;
+    mappls?: {
+      Map: new (element: string | HTMLElement, options?: MapOptions) => MapInstance;
+      Marker: new (options: MarkerOptions) => MarkerInstance;
+      search: new (options: SearchOptions, callback: (data: SearchResult) => void) => void;
+      rev_geocode: (coords: { lat: number; lng: number }, callback: (data: ReverseGeocodeResult | any[]) => void) => void;
+    };
+    geoAnalytics?: any;
   }
 }
 
-interface MapplsSDK {
-  Map: new (element: HTMLElement, options: MapOptions) => MapInstance;
-  Marker: new (options: MarkerOptions) => MarkerInstance;
-  search: new (options: SearchOptions, callback: (data: SearchResult) => void) => void;
-  rev_geocode: (coords: { lat: number; lng: number }, callback: (data: ReverseGeocodeResult) => void) => void;
-}
-
 interface MapOptions {
-  center?: [number, number];
+  center?: { lat: number; lng: number } | [number, number];
   zoom?: number;
   zoomControl?: boolean;
+  scrollWheel?: boolean;
+  draggable?: boolean;
+  clickableIcons?: boolean;
   location?: boolean;
   [key: string]: unknown;
 }
 
 interface MapInstance {
-  setCenter: (center: [number, number]) => void;
+  setCenter: (center: { lat: number; lng: number } | [number, number]) => void;
   setZoom: (zoom: number) => void;
+  getCenter: () => { lat: number; lng: number };
   addListener: (event: string, callback: (e: MapEvent) => void) => void;
   removeListener: (event: string) => void;
+  remove: () => void;
 }
 
 interface MarkerOptions {
@@ -39,7 +46,7 @@ interface MarkerOptions {
 interface MarkerInstance {
   setPosition: (position: { lat: number; lng: number }) => void;
   getPosition: () => { lat: number; lng: number };
-  addListener: (event: string, callback: (e: MapEvent) => void) => void;
+  addListener: (event: string, callback: (e: MarkerEvent) => void) => void;
   remove: () => void;
 }
 
@@ -48,9 +55,19 @@ interface MapEvent {
   [key: string]: unknown;
 }
 
+interface MarkerEvent {
+  target?: {
+    getPosition: () => { lat: number; lng: number };
+  };
+  [key: string]: unknown;
+}
+
 interface SearchOptions {
   q?: string;
   query?: string;
+  pod?: string;
+  region?: string;
+  location?: string;
   [key: string]: unknown;
 }
 
@@ -63,9 +80,13 @@ interface SearchResult {
 interface SearchSuggestion {
   placeName?: string;
   placeAddress?: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | string;
+  longitude?: number | string;
+  lat?: number | string;
+  lng?: number | string;
   eLoc?: string;
+  entryLatitude?: number | string;
+  entryLongitude?: number | string;
   [key: string]: unknown;
 }
 
@@ -77,4 +98,15 @@ interface ReverseGeocodeResult {
   [key: string]: unknown;
 }
 
-export { };
+export type {
+  MapOptions,
+  MapInstance,
+  MarkerOptions,
+  MarkerInstance,
+  MapEvent,
+  MarkerEvent,
+  SearchOptions,
+  SearchResult,
+  SearchSuggestion,
+  ReverseGeocodeResult
+};
