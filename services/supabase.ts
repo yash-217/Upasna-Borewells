@@ -128,8 +128,11 @@ export const mapEmployeeFromDB = (data: DBEmployee): Employee => ({
   email: data.email || undefined,
   phone: data.phone,
   salary: Number(data.salary) || 0,
-  joinDate: data.join_date,
+  joinDate: data.join_date || '',
   assignedVehicle: data.assigned_vehicle || undefined,
+  status: data.status || 'active',
+  holidayStartDate: data.holiday_start_date || undefined,
+  holidayReturnDate: data.holiday_return_date || undefined,
   lastEditedBy: data.last_edited_by || undefined,
   lastEditedAt: data.last_edited_at || undefined
 });
@@ -143,6 +146,9 @@ export const mapEmployeeToDB = (e: Partial<Employee>): Partial<DBEmployee> => ({
   salary: safeNumber(e.salary),
   join_date: safeDateToDB(e.joinDate),
   assigned_vehicle: e.assignedVehicle,
+  status: e.status || 'active',
+  holiday_start_date: e.status === 'on_holiday' ? safeDateToDB(e.holidayStartDate) : null,
+  holiday_return_date: e.status === 'on_holiday' ? safeDateToDB(e.holidayReturnDate) : null,
   last_edited_by: e.lastEditedBy,
   last_edited_at: safeTimestampToDB(e.lastEditedAt)
 });
@@ -158,7 +164,7 @@ export const mapRequestFromDB = (data: DBServiceRequest): ServiceRequest => ({
   district: data.district || undefined,
   state: data.state || undefined,
   pincode: data.pincode || undefined,
-  date: data.date,
+  date: data.date || '',
   type: data.type as ServiceType,
   status: data.status as ServiceStatus,
   vehicle: data.vehicle || undefined,

@@ -138,7 +138,7 @@ export const CreateServiceRequest: React.FC<CreateServiceRequestProps> = ({
             <div>
               <h4 className="flex items-center gap-2 text-sm font-semibold text-purple-900 dark:text-purple-300">
                 <Sparkles size={16} />
-                Auto-fill from Photo
+                Auto-fill
               </h4>
             </div>
             <div className="relative">

@@ -62,7 +62,12 @@ export const useAuth = (): UseAuthReturn => {
         });
 
         // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            // Ignore USER_UPDATED events (e.g., password changes) - they don't need to refetch user data
+            if (event === 'USER_UPDATED') {
+                return;
+            }
+
             if (session?.user) {
                 const user = await createUserFromSession(session);
                 setCurrentUser(user);

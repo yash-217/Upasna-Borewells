@@ -93,6 +93,9 @@ export interface Employee extends TrackedEntity {
     salary: number;
     joinDate: string;
     assignedVehicle?: string;
+    status: 'active' | 'on_holiday';
+    holidayStartDate?: string;
+    holidayReturnDate?: string;
 }
 
 // Vehicle
