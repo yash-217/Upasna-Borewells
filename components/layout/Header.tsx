@@ -68,12 +68,12 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Desktop: Filters & Profile */}
         <div className="hidden md:flex flex-1 flex-row items-center justify-end gap-6">
           {showFilter && (
-            <div className="flex items-center bg-slate-50 dark:bg-black/40 rounded-full px-4 py-2 border border-slate-200 dark:border-white/10 hover:border-brand-300 dark:hover:border-brand-700 transition-colors group">
-              <Truck size={16} className="text-slate-400 dark:text-slate-500 mr-2 shrink-0 group-hover:text-brand-500 transition-colors" />
+            <div className="flex items-center bg-white dark:bg-neutral-800 rounded-lg px-4 py-2.5 border border-slate-200 dark:border-neutral-700 hover:border-blue-400 dark:hover:border-blue-600 transition-colors shadow-sm">
+              <Truck size={16} className="text-blue-600 mr-2 shrink-0" />
               <select
                 value={vehicleFilter}
                 onChange={(e) => setVehicleFilter(e.target.value)}
-                className="bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-700 dark:text-slate-200 w-48 cursor-pointer focus:outline-none"
+                className="bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-800 dark:text-white w-44 cursor-pointer focus:outline-none"
               >
                 <option value="All Vehicles">All Vehicles</option>
                 {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
@@ -108,13 +108,13 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Mobile Filters (Below header content) */}
         {showFilter && (
-          <div className="md:hidden mt-2 pt-2 border-t border-slate-100 dark:border-white/5">
-            <div className="flex items-center bg-slate-50 dark:bg-black/20 rounded-xl px-3 py-2 border border-slate-200 dark:border-white/10">
-              <Truck size={16} className="text-slate-500 dark:text-slate-400 mr-2 shrink-0" />
+          <div className="md:hidden mt-2 pt-2 border-t border-slate-100 dark:border-neutral-800">
+            <div className="flex items-center bg-white dark:bg-neutral-800 rounded-lg px-3 py-2.5 border border-slate-200 dark:border-neutral-700 shadow-sm">
+              <Truck size={16} className="text-blue-600 mr-2 shrink-0" />
               <select
                 value={vehicleFilter}
                 onChange={(e) => setVehicleFilter(e.target.value)}
-                className="w-full bg-transparent border-none text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none"
+                className="w-full bg-transparent border-none text-sm font-medium text-slate-800 dark:text-white focus:outline-none"
               >
                 <option value="All Vehicles">All Vehicles</option>
                 {vehicles.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}

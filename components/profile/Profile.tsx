@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Moon, Sun, LogOut, Save, Pencil, Check, X } from 'lucide-react';
+import { ArrowLeft, Moon, Sun, LogOut, Pencil, Check, X, Lock, Eye, EyeOff } from 'lucide-react';
 import { User, View } from '../../types';
-import { useApp } from '../../contexts/AppContext';
 import { formatPhoneNumberInput } from '../../lib/formatters';
+import { supabase } from '../../services/supabase';
 
 interface ProfileProps {
     currentUser: User;
@@ -34,6 +34,25 @@ export const Profile: React.FC<ProfileProps> = ({
         state: currentUser.state || '',
         pincode: currentUser.pincode || ''
     });
+
+    // Password change state
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' });
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
+    const [isGoogleUser, setIsGoogleUser] = useState(false);
+
+    // Check if user is signed in with Google
+    useEffect(() => {
+        const checkAuthProvider = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.app_metadata?.provider === 'google') {
+                setIsGoogleUser(true);
+            }
+        };
+        checkAuthProvider();
+    }, []);
 
     // Track if there are unsaved changes
     const hasChanges =
@@ -94,6 +113,46 @@ export const Profile: React.FC<ProfileProps> = ({
             pincode: currentUser.pincode || ''
         });
         setIsEditing(false);
+    };
+
+    const handleChangePassword = async () => {
+        if (!passwordData.newPassword || !passwordData.confirmPassword) {
+            showToast('Please fill in all fields', 'error');
+            return;
+        }
+
+        if (passwordData.newPassword.length < 6) {
+            showToast('Password must be at least 6 characters', 'error');
+            return;
+        }
+
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            showToast('Passwords do not match', 'error');
+            return;
+        }
+
+        setIsChangingPassword(true);
+        try {
+            const { error } = await supabase.auth.updateUser({
+                password: passwordData.newPassword
+            });
+
+            if (error) {
+                throw error;
+            }
+
+            // Close modal and reset state immediately before showing toast
+            setShowPasswordModal(false);
+            setPasswordData({ newPassword: '', confirmPassword: '' });
+            setIsChangingPassword(false);
+
+            // Show success message after state is cleared
+            showToast('Password changed successfully!', 'success');
+        } catch (error: unknown) {
+            setIsChangingPassword(false);
+            const message = error instanceof Error ? error.message : 'Failed to change password';
+            showToast(message, 'error');
+        }
     };
 
     const inputClass = "w-full px-4 py-3 bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all";
@@ -301,6 +360,20 @@ export const Profile: React.FC<ProfileProps> = ({
                             <div className={`w-5 h-5 rounded-full bg-white shadow transform transition-transform ${darkMode ? 'translate-x-5' : 'translate-x-0'}`} />
                         </div>
                     </button>
+
+                    {/* Change Password Button - hidden for Google OAuth users */}
+                    {!isGoogleUser && (
+                        <button
+                            onClick={() => setShowPasswordModal(true)}
+                            className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 dark:hover:bg-neutral-800 transition-colors border-t border-slate-100 dark:border-neutral-800"
+                        >
+                            <div className="flex items-center gap-3">
+                                <Lock size={20} className="text-slate-500 dark:text-slate-400" />
+                                <span className="text-slate-700 dark:text-neutral-300">Change Password</span>
+                            </div>
+                            <span className="text-slate-400 dark:text-neutral-500">→</span>
+                        </button>
+                    )}
                 </div>
 
                 {/* Sign Out */}
@@ -317,6 +390,96 @@ export const Profile: React.FC<ProfileProps> = ({
                     v1.8.0 © 2024 Upasna Borewells
                 </p>
             </div>
+
+            {/* Password Change Modal */}
+            {showPasswordModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl w-full max-w-md border border-slate-200 dark:border-neutral-800 animate-in fade-in zoom-in duration-200">
+                        <div className="p-6 border-b border-slate-100 dark:border-neutral-800 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-slate-800 dark:text-white">Change Password</h3>
+                            <button
+                                onClick={() => {
+                                    setShowPasswordModal(false);
+                                    setPasswordData({ newPassword: '', confirmPassword: '' });
+                                }}
+                                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200 rounded-full hover:bg-slate-100 dark:hover:bg-neutral-800"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className={labelClass}>New Password</label>
+                                <div className="relative">
+                                    <input
+                                        type={showNewPassword ? 'text' : 'password'}
+                                        value={passwordData.newPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                        className={inputClass}
+                                        placeholder="Enter new password"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowNewPassword(!showNewPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-neutral-300"
+                                    >
+                                        {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className={labelClass}>Confirm New Password</label>
+                                <div className="relative">
+                                    <input
+                                        type={showConfirmPassword ? 'text' : 'password'}
+                                        value={passwordData.confirmPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                        className={inputClass}
+                                        placeholder="Confirm new password"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-neutral-300"
+                                    >
+                                        {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                                Password must be at least 6 characters long.
+                            </p>
+                        </div>
+
+                        <div className="p-6 border-t border-slate-100 dark:border-neutral-800 flex justify-end gap-3 bg-slate-50 dark:bg-neutral-900/50 rounded-b-2xl">
+                            <button
+                                onClick={() => {
+                                    setShowPasswordModal(false);
+                                    setPasswordData({ newPassword: '', confirmPassword: '' });
+                                }}
+                                className="px-4 py-2 text-slate-600 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleChangePassword}
+                                disabled={isChangingPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {isChangingPassword ? (
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <Lock size={16} />
+                                )}
+                                Change Password
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApp } from './contexts/AppContext';
 import { useTheme } from './contexts/ThemeContext';
-import { useAuth, useAppQuery, useAppMutations, useSwipeGesture } from './hooks';
+import { useAuth, useAppQuery, useAppMutations, useSwipeGesture, useKeyboardNavigation } from './hooks';
 import { ConfirmationModal } from './components/common/ConfirmationModal';
 import { SplashScreen } from './components/common/SplashScreen';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -10,6 +10,7 @@ import { Login } from './components/auth/Login';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { Toast } from './components/common/Toast';
+import { KeyboardShortcutsModal } from './components/common/KeyboardShortcutsModal';
 import type { Expense } from './types/index';
 import { Employee, Product, ServiceRequest, View } from './types/index';
 
@@ -43,6 +44,16 @@ export default function App() {
   const swipeHandlers = useSwipeGesture({
     onSwipeRight: () => !isSidebarOpen && setSidebarOpen(true),
     onSwipeLeft: () => isSidebarOpen && setSidebarOpen(false),
+  });
+
+  // Keyboard shortcuts
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  useKeyboardNavigation({
+    currentView,
+    setCurrentView,
+    setSidebarOpen,
+    isSidebarOpen,
+    onShowHelp: () => setShowKeyboardHelp(true),
   });
 
   // Data fetching
@@ -134,6 +145,12 @@ export default function App() {
         isDangerous={true}
       />
 
+      {/* Keyboard Shortcuts Help */}
+      <KeyboardShortcutsModal
+        isOpen={showKeyboardHelp}
+        onClose={() => setShowKeyboardHelp(false)}
+      />
+
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm transition-opacity" onClick={() => setSidebarOpen(false)} />
@@ -170,7 +187,7 @@ export default function App() {
             }>
               {currentView === View.HOME && (
                 <div className="animate-in fade-in duration-500">
-                  <Home currentUser={currentUser} setCurrentView={setCurrentView} />
+                  <Home currentUser={currentUser} setCurrentView={setCurrentView} requests={requests} employees={employees} />
                 </div>
               )}
               {currentView === View.DASHBOARD && (
@@ -193,6 +210,7 @@ export default function App() {
                     isReadOnly={currentUser.isGuest}
                     onResetFilters={handleResetFilters}
                     showToast={showToast}
+                    setCurrentView={setCurrentView}
                   />
                 </div>
               )}
@@ -203,6 +221,7 @@ export default function App() {
                     vehicles={vehicles}
                     currentUser={currentUser}
                     onAddRequest={handleAddRequest}
+                    onAddProduct={handleAddProduct}
                     onCancel={() => setCurrentView(View.REQUESTS)}
                     showToast={showToast}
                   />
@@ -247,6 +266,7 @@ export default function App() {
                     isReadOnly={!!currentUser.isGuest}
                     vehicleFilter={vehicleFilter}
                     onResetFilters={handleResetFilters}
+                    setCurrentView={setCurrentView}
                   />
                 </div>
               )}

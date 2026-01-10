@@ -26,8 +26,11 @@ export interface DBEmployee {
     email: string | null;
     phone: string;
     salary: number;
-    join_date: string;
+    join_date: string | null;
     assigned_vehicle: string | null;
+    status: 'active' | 'on_holiday';
+    holiday_start_date: string | null;
+    holiday_return_date: string | null;
     last_edited_by: string | null;
     last_edited_at: string | null;
 }
@@ -43,7 +46,7 @@ export interface DBServiceRequest {
     district: string | null;
     state: string | null;
     pincode: string | null;
-    date: string;
+    date: string | null;
     type: string;
     status: string;
     vehicle: string | null;

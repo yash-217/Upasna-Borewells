@@ -1,7 +1,6 @@
-import React, { useState, ChangeEvent, useEffect } from 'react';
-import Tesseract from 'tesseract.js';
-import { Trash2, Search, X, Plus, Truck, Upload, Calendar, DollarSign, FileText, Wrench, FileSpreadsheet, User as UserIcon, Edit2 } from 'lucide-react';
-import { Vehicle, Employee, User } from '../../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Search, X, Truck, Calendar, Edit2, ChevronLeft, ChevronRight, TrendingUp, AlertTriangle, Tag, Fuel, Wrench, Wallet, Settings } from 'lucide-react';
+import { Vehicle, Employee, User, View } from '../../types';
 
 export interface Expense {
   id: string;
@@ -13,9 +12,33 @@ export interface Expense {
   last_edited_by?: string;
   last_edited_at?: string;
   created_by?: string;
+  receipt_status?: 'uploaded' | 'missing' | 'verified';
 }
 
 const EXPENSE_TYPES = ['Fuel', 'Maintenance', 'Salary', 'Miscellaneous'] as const;
+
+// Type icon mapping
+const TYPE_ICONS: Record<Expense['type'], React.ElementType> = {
+  Fuel: Fuel,
+  Maintenance: Wrench,
+  Salary: Wallet,
+  Miscellaneous: Settings,
+};
+
+// Type color mapping
+const TYPE_COLORS: Record<Expense['type'], { bg: string; text: string; darkBg: string; darkText: string }> = {
+  Fuel: { bg: 'bg-amber-100', text: 'text-amber-700', darkBg: 'dark:bg-amber-900/30', darkText: 'dark:text-amber-400' },
+  Maintenance: { bg: 'bg-indigo-100', text: 'text-indigo-700', darkBg: 'dark:bg-indigo-900/30', darkText: 'dark:text-indigo-400' },
+  Salary: { bg: 'bg-blue-100', text: 'text-blue-700', darkBg: 'dark:bg-blue-900/30', darkText: 'dark:text-blue-400' },
+  Miscellaneous: { bg: 'bg-slate-100', text: 'text-slate-700', darkBg: 'dark:bg-slate-700', darkText: 'dark:text-slate-300' },
+};
+
+// Receipt status styling
+const RECEIPT_STATUS: Record<string, { bg: string; text: string; icon: string; label: string }> = {
+  uploaded: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-400', icon: 'check_circle', label: 'Uploaded' },
+  verified: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-400', icon: 'verified', label: 'Verified' },
+  missing: { bg: 'bg-rose-100 dark:bg-rose-900/30', text: 'text-rose-700 dark:text-rose-400', icon: 'cancel', label: 'Missing' },
+};
 
 interface ExpensesProps {
   expenses: Expense[];
@@ -28,27 +51,32 @@ interface ExpensesProps {
   isReadOnly: boolean;
   vehicleFilter: string;
   onResetFilters: () => void;
+  setCurrentView?: (view: View) => void;
 }
 
-export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, employees, currentUser, onAdd, onUpdate, onDelete, isReadOnly, vehicleFilter, onResetFilters }) => {
-  // Form State
-  const [date, setDate] = useState('');
-  const [amount, setAmount] = useState('');
-  const [type, setType] = useState<Expense['type']>('Fuel');
-  const [description, setDescription] = useState('');
-  const [vehicle, setVehicle] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [ocrStatus, setOcrStatus] = useState('');
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [showDateFilter, setShowDateFilter] = useState(false);
+const ITEMS_PER_PAGE = 10;
+
+export const Expenses: React.FC<ExpensesProps> = ({
+  expenses,
+  vehicles,
+  employees,
+  currentUser,
+  onUpdate,
+  onDelete,
+  isReadOnly,
+  vehicleFilter,
+  onResetFilters,
+  setCurrentView
+}) => {
+  // UI State
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Filter & Sort State
   const [filterType, setFilterType] = useState<string>('All');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [employeeFilter, setEmployeeFilter] = useState<string>('All');
 
   useEffect(() => {
@@ -59,158 +87,56 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, employee
     }
   }, [currentUser]);
 
-  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Statistics calculations
+  const stats = useMemo(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    setIsProcessing(true);
-    setOcrStatus('Initializing OCR...');
-
-    try {
-      setOcrStatus('Recognizing text...');
-      const result = await Tesseract.recognize(
-        file,
-        'eng',
-        {
-          logger: m => {
-            if (m.status === 'recognizing text') {
-              setOcrStatus(`Processing: ${Math.round(m.progress * 100)}%`);
-            }
-          }
-        }
-      );
-
-      const text = result.data.text;
-      parseReceiptText(text);
-      setOcrStatus('Done!');
-    } catch (err) {
-      console.error(err);
-      setOcrStatus('Error processing image.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Basic heuristic to find dates and money in OCR text
-  const parseReceiptText = (text: string) => {
-    // Look for date (YYYY-MM-DD or DD/MM/YYYY)
-    // This is a simple regex, real-world receipt parsing is complex
-    const dateRegex = /(\d{4}-\d{2}-\d{2})|(\d{2}\/\d{2}\/\d{4})/;
-    const dateMatch = text.match(dateRegex);
-
-    // Look for currency (e.g., 10.99)
-    const amountRegex = /(\d+\.\d{2})/;
-    const amountMatch = text.match(amountRegex);
-
-    if (dateMatch) {
-      // Normalize date if needed, for now just taking the match
-      // In a real app, you'd parse this into YYYY-MM-DD for the input
-      console.log('Found date:', dateMatch[0]);
-      // Simple attempt to format for input type="date" if it matches YYYY-MM-DD
-      if (dateMatch[0].match(/^\d{4}-\d{2}-\d{2}$/)) {
-        setDate(dateMatch[0]);
-      }
-    }
-
-    if (amountMatch) {
-      setAmount(amountMatch[0]);
-    }
-
-    // Default description to a snippet of the text
-    setDescription(`Receipt scan: ${text.substring(0, 20).replace(/\n/g, ' ')}...`);
-  };
-
-  const handleAddExpense = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!date || !amount) return;
-
-    const newExpense: Expense = {
-      id: Date.now().toString(),
-      date,
-      type: type,
-      amount: parseFloat(amount),
-      description,
-      vehicle: vehicle || undefined,
-      last_edited_by: currentUser.name,
-      last_edited_at: new Date().toISOString()
-    };
-
-    onAdd(newExpense);
-    // Reset form
-    setDate('');
-    setAmount('');
-    setDescription('');
-    setVehicle('');
-    setOcrStatus('');
-    setShowAddForm(false);
-  };
-
-  const handleCsvImport = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split('\n');
-      // Skip header row if it contains 'date'
-      const startIndex = lines[0].toLowerCase().includes('date') ? 1 : 0;
-
-      for (let i = startIndex; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-
-        // Expected CSV Format: Date, Type, Amount, Description, Vehicle
-        const [date, typeRaw, amountStr, description, vehicle] = line.split(',').map(s => s.trim());
-        const amount = parseFloat(amountStr);
-
-        if (date && !isNaN(amount)) {
-          const type = EXPENSE_TYPES.find(t => t.toLowerCase() === typeRaw?.toLowerCase()) || 'Miscellaneous';
-
-          onAdd({
-            id: Date.now().toString() + Math.random().toString().slice(2),
-            date,
-            type: type as Expense['type'],
-            amount,
-            description: description || 'Imported Expense',
-            vehicle: vehicle || undefined,
-            last_edited_by: 'CSV Import',
-            last_edited_at: new Date().toISOString()
-          });
-        }
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
-  const filteredExpenses = expenses
-    .filter(exp => {
-      const matchesVehicle = vehicleFilter === 'All Vehicles' || exp.vehicle === vehicleFilter;
-      const matchesType = filterType === 'All' || exp.type === filterType;
-      const description = exp.description || '';
-      const matchesSearch = description.toLowerCase().includes(searchTerm.toLowerCase()) || exp.amount.toString().includes(searchTerm);
-      const matchesDate = (!startDate || exp.date >= startDate) && (!endDate || exp.date <= endDate);
-      const matchesEmployee = employeeFilter === 'All' || exp.created_by === employeeFilter || (!exp.created_by && exp.last_edited_by === employeeFilter);
-
-      return matchesVehicle && matchesType && matchesSearch && matchesDate && matchesEmployee;
-    })
-    .sort((a, b) => {
-      const dateA = new Date(a.date).getTime();
-      const dateB = new Date(b.date).getTime();
-      return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+    const thisMonthExpenses = expenses.filter(e => new Date(e.date) >= monthStart);
+    const lastMonthExpenses = expenses.filter(e => {
+      const d = new Date(e.date);
+      return d >= lastMonthStart && d <= lastMonthEnd;
     });
 
-  const activeFiltersCount = (filterType !== 'All' ? 1 : 0) + (startDate ? 1 : 0) + (endDate ? 1 : 0) + (currentUser.role !== 'staff' && employeeFilter !== 'All' ? 1 : 0);
+    const thisMonthTotal = thisMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const lastMonthTotal = lastMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const percentChange = lastMonthTotal > 0 ? ((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100 : 0;
 
-  const clearFilters = () => {
-    setFilterType('All');
-    setStartDate('');
-    setEndDate('');
-    if (currentUser.role !== 'staff') {
-      setEmployeeFilter('All');
-    }
-  };
+    // Top spending category
+    const categoryTotals = EXPENSE_TYPES.reduce((acc, type) => {
+      acc[type] = thisMonthExpenses.filter(e => e.type === type).reduce((sum, e) => sum + e.amount, 0);
+      return acc;
+    }, {} as Record<string, number>);
+    const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+    const topCategory = sortedCategories[0]?.[0] || 'None';
+    const secondCategory = sortedCategories[1]?.[0] || '';
+
+    // Missing receipts
+    const missingReceipts = expenses.filter(e => e.receipt_status === 'missing').length;
+
+    return { thisMonthTotal, percentChange, topCategory, secondCategory, missingReceipts };
+  }, [expenses]);
+
+  const filteredExpenses = useMemo(() => {
+    return expenses
+      .filter(exp => {
+        const matchesVehicle = vehicleFilter === 'All Vehicles' || exp.vehicle === vehicleFilter;
+        const matchesType = filterType === 'All' || exp.type === filterType;
+        const description = exp.description || '';
+        const matchesSearch = description.toLowerCase().includes(searchTerm.toLowerCase()) || exp.amount.toString().includes(searchTerm);
+        const matchesDate = (!startDate || exp.date >= startDate) && (!endDate || exp.date <= endDate);
+        const matchesEmployee = employeeFilter === 'All' || exp.created_by === employeeFilter || (!exp.created_by && exp.last_edited_by === employeeFilter);
+
+        return matchesVehicle && matchesType && matchesSearch && matchesDate && matchesEmployee;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [expenses, vehicleFilter, filterType, searchTerm, startDate, endDate, employeeFilter]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredExpenses.length / ITEMS_PER_PAGE);
+  const paginatedExpenses = filteredExpenses.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   // Permission check: Admin can edit all, Staff can edit their own
   const canEdit = (expense: Expense) => {
@@ -234,124 +160,132 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, employee
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header & Controls */}
-      <div className="flex flex-col gap-4 bg-white dark:bg-neutral-900 p-4 rounded-xl border border-slate-200 dark:border-neutral-800 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Search Box - Maximized */}
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search expenses..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white"
-            />
-          </div>
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
 
-          <div className="flex flex-wrap gap-2 items-center">
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
+  };
 
-            {/* Employee Filter (Admin Only) */}
-            {currentUser.role !== 'staff' ? (
-              <div className="relative">
-                <div className="absolute left-3 top-2.5 pointer-events-none text-slate-400">
-                  <UserIcon size={16} />
-                </div>
-                <select
-                  value={employeeFilter}
-                  onChange={(e) => setEmployeeFilter(e.target.value)}
-                  className="pl-10 pr-8 py-2 bg-white dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white appearance-none cursor-pointer min-w-[150px]"
-                >
-                  <option value="All">All Employees</option>
-                  {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
-                </select>
-              </div>
-            ) : (
-              <div className="hidden"></div>
-            )}
+  // Render expense card for mobile
+  const renderExpenseCard = (expense: Expense) => {
+    const typeColors = TYPE_COLORS[expense.type];
+    const TypeIcon = TYPE_ICONS[expense.type];
+    const receiptStatus = RECEIPT_STATUS[expense.receipt_status || 'uploaded'];
 
-            <div className="relative">
-              <button
-                onClick={() => setShowDateFilter(!showDateFilter)}
-                className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm font-medium ${startDate || endDate
-                  ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400'
-                  : 'bg-slate-50 dark:bg-black border-slate-200 dark:border-neutral-800 text-slate-700 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-800'
-                  }`}
-              >
-                <Calendar size={16} />
-                <span className="hidden sm:inline">{startDate || endDate ? 'Date Active' : 'Filter by Date'}</span>
-              </button>
-
-              {showDateFilter && (
-                <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-slate-200 dark:border-neutral-800 p-4 z-20 animate-in fade-in zoom-in-95 duration-200">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-sm font-semibold text-slate-800 dark:text-white">Date Range</h4>
-                    <button onClick={() => setShowDateFilter(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-neutral-300">
-                      <X size={16} />
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs font-medium text-slate-500 dark:text-neutral-400 mb-1 block">Start Date</label>
-                      <input
-                        type="date"
-                        value={startDate}
-                        max={endDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-slate-500 dark:text-neutral-400 mb-1 block">End Date</label>
-                      <input
-                        type="date"
-                        value={endDate}
-                        min={startDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
-                      />
-                    </div>
-                    {(startDate || endDate) && (
-                      <button
-                        onClick={() => { setStartDate(''); setEndDate(''); }}
-                        className="w-full py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                      >
-                        Clear Dates
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
+    return (
+      <div key={expense.id} className="bg-white dark:bg-neutral-900 p-4 rounded-xl border border-slate-200 dark:border-neutral-800 shadow-sm">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-start gap-3">
+            <div className={`p-2.5 rounded-xl ${typeColors.bg} ${typeColors.text} ${typeColors.darkBg} ${typeColors.darkText}`}>
+              <TypeIcon size={18} />
             </div>
+            <div>
+              <h4 className="font-semibold text-slate-800 dark:text-white text-sm">{expense.description || expense.type}</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{formatDate(expense.date)}</p>
+            </div>
+          </div>
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${typeColors.bg} ${typeColors.text} ${typeColors.darkBg} ${typeColors.darkText}`}>
+            {expense.type}
+          </span>
+        </div>
 
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="px-3 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white text-sm cursor-pointer"
-            >
-              <option value="All">All Types</option>
-              {EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-
-            <button
-              onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-              className="px-4 py-2 bg-slate-50 dark:bg-black border border-slate-200 dark:border-neutral-800 rounded-lg text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors whitespace-nowrap text-sm font-medium"
-            >
-              {sortOrder === 'asc' ? 'Oldest' : 'Newest'}
-            </button>
-
-            {activeFiltersCount > 0 && (
+        <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-neutral-800">
+          <div>
+            <p className="text-xl font-bold text-slate-900 dark:text-white">{formatCurrency(expense.amount)}</p>
+            {expense.vehicle && (
+              <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
+                <Truck size={12} /> {expense.vehicle}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${receiptStatus.bg} ${receiptStatus.text}`}>
+              <span className="material-symbols-outlined text-sm">{receiptStatus.icon}</span>
+              {receiptStatus.label}
+            </span>
+            {canEdit(expense) && (
               <button
-                onClick={clearFilters}
-                className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                title="Clear Filters"
+                onClick={() => handleEditClick(expense)}
+                className="text-blue-600 hover:bg-blue-600/10 p-2 rounded-lg transition-colors"
               >
-                <X size={20} />
+                <Edit2 size={16} />
+              </button>
+            )}
+            {!isReadOnly && currentUser.role === 'admin' && (
+              <button
+                onClick={() => onDelete(expense.id)}
+                className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 p-2 rounded-lg transition-colors"
+              >
+                <X size={16} />
               </button>
             )}
           </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-6 max-w-[1200px] mx-auto">
+      {/* Page Heading */}
+      <div className="flex flex-wrap justify-between items-end gap-3">
+        <div className="flex min-w-72 flex-col gap-1">
+          <h1 className="text-slate-900 dark:text-white text-3xl md:text-4xl font-black leading-tight tracking-tight">Expense Tracking Log</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-base font-normal">Manage and monitor drilling operations expenditures</p>
+        </div>
+        {!isReadOnly && setCurrentView && (
+          <button
+            onClick={() => setCurrentView(View.NEW_EXPENSE)}
+            className="flex items-center gap-2 cursor-pointer justify-center rounded-lg h-12 px-6 bg-blue-600 text-white text-sm font-bold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all"
+          >
+            <span className="material-symbols-outlined text-xl">add</span>
+            <span className="truncate">Add New Expense</span>
+          </button>
+        )}
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="flex flex-wrap gap-4">
+        {/* Monthly Total */}
+        <div className="flex min-w-[200px] flex-1 flex-col gap-2 rounded-xl p-6 border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm">
+          <div className="flex justify-between items-start">
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Monthly Total Expenditure</p>
+            <Wallet className="text-blue-600" size={20} />
+          </div>
+          <p className="text-slate-900 dark:text-white text-2xl md:text-3xl font-bold leading-tight">{formatCurrency(stats.thisMonthTotal)}</p>
+          <p className={`text-sm font-semibold flex items-center gap-1 ${stats.percentChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <TrendingUp size={14} className={stats.percentChange < 0 ? 'rotate-180' : ''} />
+            {stats.percentChange >= 0 ? '+' : ''}{stats.percentChange.toFixed(1)}% vs last month
+          </p>
+        </div>
+
+        {/* Top Category */}
+        <div className="flex min-w-[200px] flex-1 flex-col gap-2 rounded-xl p-6 border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm">
+          <div className="flex justify-between items-start">
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Top Spending Category</p>
+            <Tag className="text-amber-500" size={20} />
+          </div>
+          <p className="text-slate-900 dark:text-white text-2xl md:text-3xl font-bold leading-tight">{stats.topCategory}</p>
+          {stats.secondCategory && (
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Followed by: {stats.secondCategory}</p>
+          )}
+        </div>
+
+        {/* Missing Receipts */}
+        <div className="flex min-w-[200px] flex-1 flex-col gap-2 rounded-xl p-6 border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm">
+          <div className="flex justify-between items-start">
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Missing Receipts</p>
+            <AlertTriangle className="text-rose-500" size={20} />
+          </div>
+          <p className="text-slate-900 dark:text-white text-2xl md:text-3xl font-bold leading-tight">{stats.missingReceipts} entries</p>
+          {stats.missingReceipts > 0 && (
+            <p className="text-rose-600 text-sm font-semibold flex items-center gap-1">
+              <AlertTriangle size={14} /> Action required
+            </p>
+          )}
         </div>
       </div>
 
@@ -377,77 +311,207 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, vehicles, employee
         </div>
       )}
 
-      {/* Expenses List */}
-      <div className="grid gap-4">
-        {filteredExpenses.map(expense => (
-          <div key={expense.id} className="bg-white dark:bg-neutral-900 p-4 rounded-xl border border-slate-200 dark:border-neutral-800 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex items-start gap-4">
-              <div className={`p-3 rounded-xl ${expense.type === 'Fuel' ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' :
-                expense.type === 'Maintenance' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' :
-                  expense.type === 'Salary' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
-                    'bg-slate-100 text-slate-600 dark:bg-neutral-800 dark:text-neutral-400'
-                }`}>
-                {expense.type === 'Fuel' ? <Truck size={20} /> :
-                  expense.type === 'Maintenance' ? <Wrench size={20} /> :
-                    expense.type === 'Salary' ? <DollarSign size={20} /> :
-                      <FileText size={20} />}
-              </div>
-              <div>
-                <h4 className="font-semibold text-slate-800 dark:text-white">{expense.description}</h4>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-slate-500 dark:text-neutral-400">
-                  <span className="flex items-center gap-1"><Calendar size={14} /> {expense.date}</span>
-                  <span className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 dark:bg-neutral-800 rounded-full text-xs font-medium">
-                    {expense.type}
-                  </span>
-                  {expense.vehicle && (
-                    <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-xs font-medium">
-                      <Truck size={12} /> {expense.vehicle}
-                    </span>
-                  )}
-                </div>
-                {expense.created_by && (
-                  <div className="text-xs text-slate-400 dark:text-neutral-500 mt-2">
-                    Created by: <span className="font-medium">{expense.created_by}</span>
-                  </div>
-                )}
-              </div>
-            </div>
+      {/* Quick Filters */}
+      <div className="bg-white dark:bg-neutral-900 p-4 rounded-xl border border-slate-200 dark:border-neutral-800">
+        <div className="flex items-center gap-4 mb-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Quick Filters</span>
+        </div>
+        <div className="flex gap-3 flex-wrap items-center">
+          {/* All Expenses */}
+          <button
+            onClick={() => setFilterType('All')}
+            className={`flex h-9 items-center justify-center gap-x-2 rounded-lg px-4 transition-colors ${filterType === 'All'
+              ? 'bg-blue-600/10 text-blue-600 border border-blue-600/20'
+              : 'bg-slate-100 dark:bg-neutral-800 hover:bg-slate-200 dark:hover:bg-neutral-700'
+              }`}
+          >
+            <span className="text-sm font-bold">All Expenses</span>
+          </button>
 
-            <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
-              <div className="font-bold text-lg text-slate-800 dark:text-white">
-                ₹{expense.amount.toFixed(2)}
-              </div>
-              <div className="flex items-center gap-1">
-                {canEdit(expense) && (
-                  <button
-                    onClick={() => handleEditClick(expense)}
-                    className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                    title="Edit Expense"
-                  >
-                    <Edit2 size={18} />
-                  </button>
-                )}
-                {!isReadOnly && (
-                  <button
-                    onClick={() => onDelete(expense.id)}
-                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                    title="Delete Expense"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                )}
-              </div>
-            </div>
+          {/* Type Filters */}
+          {EXPENSE_TYPES.map(type => {
+            const Icon = TYPE_ICONS[type];
+            return (
+              <button
+                key={type}
+                onClick={() => setFilterType(filterType === type ? 'All' : type)}
+                className={`flex h-9 items-center justify-center gap-x-2 rounded-lg px-4 transition-colors ${filterType === type
+                  ? 'bg-blue-600/10 text-blue-600 border border-blue-600/20'
+                  : 'bg-slate-100 dark:bg-neutral-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-neutral-700'
+                  }`}
+              >
+                <Icon size={16} />
+                <span className="text-sm font-medium hidden sm:inline">{type}</span>
+              </button>
+            );
+          })}
+
+          {/* Search Box */}
+          <div className="relative flex-1 min-w-[150px] md:min-w-[200px] ml-auto">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 h-9 bg-slate-100 dark:bg-neutral-800 border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white text-sm"
+            />
           </div>
-        ))}
 
+          {/* Date Range Filter */}
+          <button
+            onClick={() => {
+              if (startDate || endDate) {
+                setStartDate('');
+                setEndDate('');
+              }
+            }}
+            className="flex h-9 items-center justify-center gap-x-2 rounded-lg border border-slate-200 dark:border-neutral-700 px-4 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+          >
+            <Calendar size={16} />
+            <span className="text-sm font-medium hidden sm:inline">Last 30 Days</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Desktop: Table View | Mobile: Card View */}
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-slate-200 dark:border-neutral-800 overflow-hidden shadow-sm">
+        {/* Desktop Table - Hidden on mobile */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-neutral-800/50 border-b border-slate-200 dark:border-neutral-800">
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Date</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Category</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Description</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-right">Amount</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-center">Receipt Status</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-neutral-800">
+              {paginatedExpenses.map(expense => {
+                const typeColors = TYPE_COLORS[expense.type];
+                const TypeIcon = TYPE_ICONS[expense.type];
+                const receiptStatus = RECEIPT_STATUS[expense.receipt_status || 'uploaded'];
+
+                return (
+                  <tr key={expense.id} className="hover:bg-slate-50 dark:hover:bg-neutral-800/30 transition-colors">
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400 text-sm font-medium whitespace-nowrap">
+                      {formatDate(expense.date)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${typeColors.bg} ${typeColors.text} ${typeColors.darkBg} ${typeColors.darkText}`}>
+                        <TypeIcon size={14} />
+                        {expense.type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-slate-800 dark:text-white text-sm font-medium max-w-[200px] truncate">
+                        {expense.description || '-'}
+                      </div>
+                      {expense.vehicle && (
+                        <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                          <Truck size={12} /> {expense.vehicle}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right text-slate-900 dark:text-white text-sm font-bold whitespace-nowrap">
+                      {formatCurrency(expense.amount)}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${receiptStatus.bg} ${receiptStatus.text}`}>
+                        <span className="material-symbols-outlined text-base">{receiptStatus.icon}</span>
+                        {receiptStatus.label}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {canEdit(expense) && (
+                          <button
+                            onClick={() => handleEditClick(expense)}
+                            className="text-blue-600 hover:bg-blue-600/10 p-2 rounded-lg transition-colors"
+                            title="Edit Expense"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                        )}
+                        {!isReadOnly && currentUser.role === 'admin' && (
+                          <button
+                            onClick={() => onDelete(expense.id)}
+                            className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 p-2 rounded-lg transition-colors"
+                            title="Delete Expense"
+                          >
+                            <X size={18} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Cards - Shown only on mobile */}
+        <div className="md:hidden p-4 space-y-4">
+          {paginatedExpenses.map(expense => renderExpenseCard(expense))}
+        </div>
+
+        {/* Empty State */}
         {filteredExpenses.length === 0 && (
-          <div className="text-center py-12 bg-white dark:bg-neutral-900 rounded-xl border border-dashed border-slate-200 dark:border-neutral-800">
+          <div className="text-center py-12">
             <div className="inline-flex p-4 bg-slate-50 dark:bg-neutral-800 rounded-full mb-4 text-slate-400">
               <Search size={24} />
             </div>
             <h3 className="text-lg font-medium text-slate-800 dark:text-white">No expenses found</h3>
-            <p className="text-slate-500 dark:text-neutral-400 mt-1">Try adjusting your filters or search terms.</p>
+            <p className="text-slate-500 dark:text-slate-400 mt-1">Try adjusting your filters or search terms.</p>
+          </div>
+        )}
+
+        {/* Table Footer / Pagination */}
+        {filteredExpenses.length > 0 && (
+          <div className="px-4 md:px-6 py-4 border-t border-slate-200 dark:border-neutral-800 bg-slate-50 dark:bg-neutral-800/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span className="text-sm text-slate-500">
+              Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, filteredExpenses.length)} of {filteredExpenses.length} expenses
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-2 border border-slate-200 dark:border-neutral-700 rounded-lg hover:bg-white dark:hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
+                let pageNum = i + 1;
+                if (totalPages > 3) {
+                  if (currentPage === 1) pageNum = i + 1;
+                  else if (currentPage === totalPages) pageNum = totalPages - 2 + i;
+                  else pageNum = currentPage - 1 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`px-4 py-2 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm font-medium transition-colors ${currentPage === pageNum
+                      ? 'bg-white dark:bg-neutral-800 font-bold shadow-sm'
+                      : 'hover:bg-white dark:hover:bg-neutral-800'
+                      }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 border border-slate-200 dark:border-neutral-700 rounded-lg hover:bg-white dark:hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-01-09
+
+- feat: Comprehensive UI update
+
+## [0.3.5] - 2026-01-08
+
+- feat: ocr scanning for service request
+
 ## [0.3.4] - 2026-01-08
 
 - fix: ocr implementation with Gemini
